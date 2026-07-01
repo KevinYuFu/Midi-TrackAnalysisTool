@@ -1,0 +1,9 @@
+# Heavy ML models. Big download (torch ~2GB+). Install only when wiring real
+# stem separation / neural transcription.
+#   pip install -r requirements-ml.txt
+#
+# NOTE: verify model *weight* licenses before commercial use — MIT code does
+# not guarantee commercially-licensed weights.
+torch>=2.2
+demucs>=4.0
+basic-pitch>=0.3

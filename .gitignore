@@ -1,0 +1,36 @@
+# Python
+server/.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+
+# Node / client
+client/node_modules/
+client/dist/
+
+# Env / secrets
+.env
+.env.*
+*.local
+
+# Model caches & scratch
+server/.cache/
+server/.work/
+
+# Audio & MIDI artifacts (don't commit copyrighted material)
+*.wav
+*.mp3
+*.flac
+*.aiff
+*.ogg
+*.mid
+*.midi
+
+# OS
+.DS_Store
+
+# TS build artifacts
+*.tsbuildinfo
+client/vite.config.js
+client/vite.config.d.ts
