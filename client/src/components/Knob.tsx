@@ -7,6 +7,7 @@ interface KnobProps {
   max: number
   step?: number
   format?: (v: number) => string
+  assumed?: boolean
   onChange: (v: number) => void
 }
 
@@ -31,7 +32,7 @@ function arc(r: number, from: number, to: number) {
 
 // Serum-style rotary: value arc + glow, gradient body, indicator line.
 // Drag vertically to change (up = increase). Use for continuous values.
-export function Knob({ label, value, min, max, step = 1, format, onChange }: KnobProps) {
+export function Knob({ label, value, min, max, step = 1, format, assumed, onChange }: KnobProps) {
   const drag = useRef<{ y: number; value: number } | null>(null)
 
   const clamp = (v: number) => Math.min(max, Math.max(min, v))
@@ -64,7 +65,7 @@ export function Knob({ label, value, min, max, step = 1, format, onChange }: Kno
   const ind = polar(R_BODY - 4, aVal)
 
   return (
-    <div className="knob-wrap">
+    <div className={`knob-wrap${assumed ? ' assumed' : ''}`}>
       <svg
         width={SIZE}
         height={SIZE}

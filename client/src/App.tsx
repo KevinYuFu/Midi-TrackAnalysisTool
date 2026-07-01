@@ -1,11 +1,23 @@
 import { useMemo, useState } from 'react'
-import { process, suggest, type AnalysisSettings, type SuggestedSettings } from './api/client'
+import {
+  process,
+  suggest,
+  type AnalysisSettings,
+  type Stem,
+  type SuggestedSettings,
+  type SweepMode,
+  type Waveshape,
+} from './api/client'
 import { Knob } from './components/Knob'
+import { Panel } from './components/Panel'
+import { Selector } from './components/Selector'
 import { SettingsPanel } from './components/SettingsPanel'
+import { Toggle } from './components/Toggle'
+import { WaveSelector } from './components/WaveSelector'
 import { loadPreferences, savePreferences, type AppSettings } from './preferences'
 
 const PERIODS = ['1/4', '1/8', '1/16', '1/32', '1'] // 1 = a full bar
-const WAVES = ['sine', 'triangle', 'saw', 'square'] as const
+const pct = (v: number) => `${Math.round(v * 100)}%`
 
 export default function App() {
   const [prefs, setPrefs] = useState<AppSettings>(loadPreferences)
@@ -29,7 +41,6 @@ export default function App() {
     setBusy(true)
     try {
       const s = await suggest(f)
-      // Fold in the user's global defaults where the popup shows them.
       s.settings.separation_model = prefs.defaultModel
       s.settings.waveshape = prefs.defaultWaveshape
       s.settings.threshold_db = prefs.defaultThresholdDb
@@ -73,7 +84,7 @@ export default function App() {
       )}
 
       <div className="card">
-        <div className="field">
+        <div className="ctl">
           <label>Track</label>
           <input
             type="file"
@@ -81,74 +92,156 @@ export default function App() {
             onChange={(e) => e.target.files?.[0] && onPick(e.target.files[0])}
           />
         </div>
-        {busy && !settings && <p className="muted">Analyzing…</p>}
+        {busy && !settings && <p className="muted" style={{ marginBottom: 0 }}>Analyzing…</p>}
       </div>
 
       {settings && (
-        <div className="card">
-          <p className="muted" style={{ marginTop: 0 }}>
-            Purple = auto-guessed. Check these before converting.
-          </p>
+        <>
+          <p className="muted hint">Purple label = auto-guessed — check those before converting.</p>
 
-          <div className="row">
-            <div className={`field ${isAssumed('key') ? 'assumed' : ''}`}>
-              <label>Key</label>
-              <input
-                value={settings.key ?? ''}
-                placeholder="e.g. A minor"
-                onChange={(e) => set({ key: e.target.value })}
+          <div className="rack">
+            <Panel title="Source">
+              <div className="ctl">
+                <label>Stem</label>
+                <Selector
+                  value={settings.stem}
+                  onChange={(v) => set({ stem: v as Stem })}
+                  options={[
+                    { value: 'bass', label: 'Bass' },
+                    { value: 'other', label: 'Other' },
+                    { value: 'vocals', label: 'Vocals' },
+                    { value: 'drums', label: 'Drums' },
+                  ]}
+                />
+              </div>
+            </Panel>
+
+            <Panel title="Sync">
+              <Knob
+                label="BPM"
+                value={settings.bpm ?? 120}
+                min={60}
+                max={200}
+                step={1}
+                assumed={isAssumed('bpm')}
+                onChange={(v) => set({ bpm: v })}
               />
-            </div>
-            <div className={`field ${isAssumed('bpm') ? 'assumed' : ''}`}>
-              <label>BPM</label>
-              <input
-                type="number"
-                value={settings.bpm ?? ''}
-                onChange={(e) => set({ bpm: e.target.value ? Number(e.target.value) : null })}
+              <Knob
+                label="Downbeat"
+                value={settings.downbeat_ms}
+                min={0}
+                max={2000}
+                step={5}
+                format={(v) => `${v} ms`}
+                onChange={(v) => set({ downbeat_ms: v })}
               />
-            </div>
-            <div className="field">
-              <label>Waveshape</label>
-              <select
-                value={settings.waveshape}
-                onChange={(e) => set({ waveshape: e.target.value as AnalysisSettings['waveshape'] })}
-              >
-                {WAVES.map((w) => (
-                  <option key={w} value={w}>
-                    {w}
-                  </option>
-                ))}
-              </select>
-            </div>
+              <Knob
+                label="Period"
+                value={PERIODS.indexOf(settings.period)}
+                min={0}
+                max={PERIODS.length - 1}
+                step={1}
+                format={(v) => PERIODS[v] ?? '?'}
+                assumed={isAssumed('period')}
+                onChange={(v) => set({ period: PERIODS[v] })}
+              />
+            </Panel>
+
+            <Panel title="Pitch">
+              <div className={`ctl${isAssumed('key') ? ' assumed' : ''}`}>
+                <label>Key</label>
+                <input
+                  value={settings.key ?? ''}
+                  placeholder="e.g. A minor"
+                  onChange={(e) => set({ key: e.target.value })}
+                />
+              </div>
+              <div className={`ctl${isAssumed('waveshape') ? ' assumed' : ''}`}>
+                <label>Waveshape</label>
+                <WaveSelector
+                  value={settings.waveshape}
+                  onChange={(v) => set({ waveshape: v as Waveshape })}
+                />
+              </div>
+              <div className="ctl">
+                <label>Pitch sweeps</label>
+                <Selector
+                  value={settings.sweep_mode}
+                  onChange={(v) => set({ sweep_mode: v as SweepMode })}
+                  options={[
+                    { value: 'snap', label: 'Snap' },
+                    { value: 'start_end', label: 'Start+End' },
+                    { value: 'mpe', label: 'MPE' },
+                  ]}
+                />
+              </div>
+            </Panel>
+
+            <Panel title="Spectrum">
+              <Knob
+                label="Threshold"
+                value={settings.threshold_db}
+                min={-90}
+                max={0}
+                step={1}
+                format={(v) => `${v} dB`}
+                assumed={isAssumed('threshold_db')}
+                onChange={(v) => set({ threshold_db: v })}
+              />
+              <Knob
+                label="Harmonic cut"
+                value={settings.harmonic_strength}
+                min={0}
+                max={1}
+                step={0.01}
+                format={pct}
+                onChange={(v) => set({ harmonic_strength: v })}
+              />
+              <Knob
+                label="Unison"
+                value={settings.unison_cluster}
+                min={0}
+                max={1}
+                step={0.01}
+                format={pct}
+                onChange={(v) => set({ unison_cluster: v })}
+              />
+            </Panel>
+
+            <Panel title="Notes">
+              <Knob
+                label="Min length"
+                value={settings.min_note_ms}
+                min={0}
+                max={500}
+                step={5}
+                format={(v) => `${v} ms`}
+                onChange={(v) => set({ min_note_ms: v })}
+              />
+              <Knob
+                label="Max poly"
+                value={settings.max_polyphony}
+                min={1}
+                max={12}
+                step={1}
+                onChange={(v) => set({ max_polyphony: v })}
+              />
+              <div className="ctl inline">
+                <label>Velocity from FFT</label>
+                <Toggle
+                  checked={settings.velocity_from_fft}
+                  onChange={(v) => set({ velocity_from_fft: v })}
+                />
+              </div>
+            </Panel>
           </div>
 
-          <div className="knobs">
-            <Knob
-              label="Period"
-              value={PERIODS.indexOf(settings.period)}
-              min={0}
-              max={PERIODS.length - 1}
-              step={1}
-              format={(v) => PERIODS[v] ?? '?'}
-              onChange={(v) => set({ period: PERIODS[v] })}
-            />
-            <Knob
-              label="Threshold"
-              value={settings.threshold_db}
-              min={-90}
-              max={0}
-              step={1}
-              format={(v) => `${v} dB`}
-              onChange={(v) => set({ threshold_db: v })}
-            />
-          </div>
-
-          <div style={{ marginTop: 20 }}>
+          <div className="actions">
             <button disabled={busy} onClick={onConvert}>
               {busy ? 'Converting…' : 'Convert to MIDI'}
             </button>
           </div>
-        </div>
+        </>
       )}
     </div>
   )

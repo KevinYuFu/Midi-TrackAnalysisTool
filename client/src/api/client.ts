@@ -1,15 +1,24 @@
 // Thin API layer. Mirrors the server's pydantic models.
 
 export type Waveshape = 'sine' | 'triangle' | 'saw' | 'square'
+export type SweepMode = 'snap' | 'start_end' | 'mpe'
+export type Stem = 'bass' | 'other' | 'vocals' | 'drums'
 
 export interface AnalysisSettings {
   key: string | null
   bpm: number | null
+  downbeat_ms: number
   period: string
   waveshape: Waveshape
-  threshold_db: number
-  stem: string
+  sweep_mode: SweepMode
+  stem: Stem
   separation_model: string
+  threshold_db: number
+  harmonic_strength: number // 0..1 — how hard to subtract the waveshape's harmonics
+  unison_cluster: number // 0..1 — cluster detuned/unison peaks into one note
+  min_note_ms: number
+  max_polyphony: number
+  velocity_from_fft: boolean
 }
 
 export interface SuggestedSettings {
