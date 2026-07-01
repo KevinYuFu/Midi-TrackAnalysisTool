@@ -1,0 +1,7 @@
+# Minimal deps to run the API skeleton end-to-end (fast install).
+# The full pipeline falls back to stubs until analysis/ML deps are added.
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pydantic>=2.6
+python-multipart>=0.0.9
+mido>=1.3

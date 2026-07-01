@@ -1,0 +1,36 @@
+/* Design tokens. Black/white base with neon blue + purple accents.
+   Themes switch via `data-theme` on <html>. Add new themes as another block. */
+
+:root,
+[data-theme='dark'] {
+  --bg: #0a0a0b;
+  --surface: #141416;
+  --surface-2: #1c1c20;
+  --text: #f5f5f7;
+  --muted: #8a8a92;
+  --border: #26262b;
+
+  --accent-blue: #4d6bff;
+  --accent-purple: #a855f7;
+  --accent-gradient: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+
+  /* Assumed/auto-guessed values get the purple highlight. */
+  --assumed: #a855f7;
+  --assumed-bg: rgba(168, 85, 247, 0.12);
+}
+
+[data-theme='light'] {
+  --bg: #f6f6f8;
+  --surface: #ffffff;
+  --surface-2: #eeeef1;
+  --text: #0a0a0b;
+  --muted: #6b6b73;
+  --border: #e2e2e7;
+
+  --accent-blue: #3b52ff;
+  --accent-purple: #9333ea;
+  --accent-gradient: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+
+  --assumed: #9333ea;
+  --assumed-bg: rgba(147, 51, 234, 0.1);
+}

@@ -1,0 +1,8 @@
+# DSP / music-analysis layer. Install when wiring real spectral analysis,
+# key/BPM detection, and note-level MIDI work.
+#   pip install -r requirements-analysis.txt
+numpy>=1.26
+scipy>=1.12
+librosa>=0.10
+soundfile>=0.12
+pretty_midi>=0.2.10
