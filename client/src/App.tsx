@@ -3,39 +3,49 @@ import {
   process,
   suggest,
   type AnalysisSettings,
-  type Stem,
   type SuggestedSettings,
   type SweepMode,
   type Waveshape,
 } from './api/client'
 import { Knob } from './components/Knob'
-import { Panel } from './components/Panel'
+import { NoteStepper } from './components/NoteStepper'
 import { Selector } from './components/Selector'
 import { SettingsPanel } from './components/SettingsPanel'
-import { Toggle } from './components/Toggle'
 import { WaveSelector } from './components/WaveSelector'
 import { loadPreferences, savePreferences, type AppSettings } from './preferences'
 
 const PERIODS = ['1/4', '1/8', '1/16', '1/32', '1'] // 1 = a full bar
-const pct = (v: number) => `${Math.round(v * 100)}%`
+const SCALES = [
+  'Major',
+  'Minor',
+  'Dorian',
+  'Phrygian',
+  'Lydian',
+  'Mixolydian',
+  'Locrian',
+  'Harmonic Minor',
+  'Melodic Minor',
+  'Major Pentatonic',
+  'Minor Pentatonic',
+  'Blues',
+  'Whole Tone',
+  'Chromatic',
+]
 
-// Sensible starting values so the rack is visible before any track loads.
+// Starting values so the controls are visible before any track loads.
 function defaultSettings(p: AppSettings): AnalysisSettings {
   return {
-    key: null,
+    root: 'C',
+    scale: 'Minor',
     bpm: 120,
     downbeat_ms: 0,
     period: '1/16',
-    waveshape: p.defaultWaveshape,
+    waveshape: 'saw',
     sweep_mode: 'snap',
-    stem: 'bass',
-    separation_model: p.defaultModel,
-    threshold_db: p.defaultThresholdDb,
-    harmonic_strength: 0.7,
-    unison_cluster: 0.5,
-    min_note_ms: 60,
-    max_polyphony: 6,
-    velocity_from_fft: true,
+    separation_model: p.separationModel,
+    threshold_db: p.thresholdDb,
+    harmonic_strength: p.harmonicStrength,
+    velocity_from_fft: p.velocityFromFft,
   }
 }
 
@@ -62,7 +72,6 @@ export default function App() {
     setAnalyzing(true)
     try {
       const s = await suggest(f)
-      s.settings.separation_model = prefs.defaultModel
       setSuggestion(s)
       setSettings(s.settings)
     } finally {
@@ -74,7 +83,15 @@ export default function App() {
     if (!file) return
     setBusy(true)
     try {
-      const blob = await process(file, settings)
+      // Spectral params live in Preferences — merge them into the payload.
+      const payload: AnalysisSettings = {
+        ...settings,
+        separation_model: prefs.separationModel,
+        threshold_db: prefs.thresholdDb,
+        harmonic_strength: prefs.harmonicStrength,
+        velocity_from_fft: prefs.velocityFromFft,
+      }
+      const blob = await process(file, payload)
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -119,24 +136,8 @@ export default function App() {
         <p className="muted hint">Load a track to auto-fill key / BPM. Tweak anything, then Convert.</p>
       )}
 
-      <div className="rack">
-        <Panel title="Source">
-          <div className="ctl">
-            <label>Stem</label>
-            <Selector
-              value={settings.stem}
-              onChange={(v) => set({ stem: v as Stem })}
-              options={[
-                { value: 'bass', label: 'Bass' },
-                { value: 'other', label: 'Other' },
-                { value: 'vocals', label: 'Vocals' },
-                { value: 'drums', label: 'Drums' },
-              ]}
-            />
-          </div>
-        </Panel>
-
-        <Panel title="Sync">
+      <div className="card">
+        <div className="module-body">
           <Knob
             label="BPM"
             value={settings.bpm ?? 120}
@@ -165,24 +166,31 @@ export default function App() {
             assumed={isAssumed('period')}
             onChange={(v) => set({ period: PERIODS[v] })}
           />
-        </Panel>
 
-        <Panel title="Pitch">
-          <div className={`ctl${isAssumed('key') ? ' assumed' : ''}`}>
-            <label>Key</label>
-            <input
-              value={settings.key ?? ''}
-              placeholder="e.g. A minor"
-              onChange={(e) => set({ key: e.target.value })}
-            />
+          <div className={`ctl${isAssumed('root') ? ' assumed' : ''}`}>
+            <label>Root</label>
+            <NoteStepper value={settings.root} onChange={(v) => set({ root: v })} />
           </div>
-          <div className={`ctl${isAssumed('waveshape') ? ' assumed' : ''}`}>
+
+          <div className={`ctl${isAssumed('scale') ? ' assumed' : ''}`}>
+            <label>Scale</label>
+            <select value={settings.scale} onChange={(e) => set({ scale: e.target.value })}>
+              {SCALES.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="ctl">
             <label>Waveshape</label>
             <WaveSelector
               value={settings.waveshape}
               onChange={(v) => set({ waveshape: v as Waveshape })}
             />
           </div>
+
           <div className="ctl">
             <label>Pitch sweeps</label>
             <Selector
@@ -195,65 +203,7 @@ export default function App() {
               ]}
             />
           </div>
-        </Panel>
-
-        <Panel title="Spectrum">
-          <Knob
-            label="Threshold"
-            value={settings.threshold_db}
-            min={-90}
-            max={0}
-            step={1}
-            format={(v) => `${v} dB`}
-            assumed={isAssumed('threshold_db')}
-            onChange={(v) => set({ threshold_db: v })}
-          />
-          <Knob
-            label="Harmonic cut"
-            value={settings.harmonic_strength}
-            min={0}
-            max={1}
-            step={0.01}
-            format={pct}
-            onChange={(v) => set({ harmonic_strength: v })}
-          />
-          <Knob
-            label="Unison"
-            value={settings.unison_cluster}
-            min={0}
-            max={1}
-            step={0.01}
-            format={pct}
-            onChange={(v) => set({ unison_cluster: v })}
-          />
-        </Panel>
-
-        <Panel title="Notes">
-          <Knob
-            label="Min length"
-            value={settings.min_note_ms}
-            min={0}
-            max={500}
-            step={5}
-            format={(v) => `${v} ms`}
-            onChange={(v) => set({ min_note_ms: v })}
-          />
-          <Knob
-            label="Max poly"
-            value={settings.max_polyphony}
-            min={1}
-            max={12}
-            step={1}
-            onChange={(v) => set({ max_polyphony: v })}
-          />
-          <div className="ctl inline">
-            <label>Velocity from FFT</label>
-            <Toggle
-              checked={settings.velocity_from_fft}
-              onChange={(v) => set({ velocity_from_fft: v })}
-            />
-          </div>
-        </Panel>
+        </div>
       </div>
 
       <div className="actions">

@@ -15,6 +15,6 @@ def detect_bpm(audio_path: str) -> float:
     return 120.0
 
 
-def detect_key(audio_path: str) -> str:
-    """Estimate key as e.g. "A minor". STUB."""
-    return "A minor"
+def detect_key(audio_path: str) -> tuple[str, str]:
+    """Estimate key as (root, scale), e.g. ("A", "Minor"). STUB."""
+    return ("A", "Minor")

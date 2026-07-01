@@ -248,3 +248,68 @@ button:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; filter: n
 .toggle.on .thumb { left: 21px; }
 
 .actions { margin-top: 22px; }
+
+/* --- Ableton-style root note picker --- */
+.note-stepper { position: relative; display: inline-flex; align-items: stretch; gap: 6px; }
+.note-value {
+  min-width: 54px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  font-size: 16px;
+  font-weight: 600;
+  box-shadow: none;
+}
+.note-value:hover { border-color: var(--accent); box-shadow: none; filter: none; }
+.note-stepper .arrows { display: flex; flex-direction: column; gap: 3px; }
+.note-stepper .arrows button {
+  width: 26px;
+  height: 18px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  color: var(--muted);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: none;
+}
+.note-stepper .arrows button:hover {
+  color: var(--text);
+  border-color: var(--accent);
+  box-shadow: none;
+  filter: none;
+}
+.note-stepper .dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+  width: 170px;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+}
+.note-stepper .dropdown button {
+  padding: 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  background: transparent;
+  box-shadow: none;
+}
+.note-stepper .dropdown button:hover { background: var(--surface-2); box-shadow: none; filter: none; }
+.note-stepper .dropdown button.active {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
