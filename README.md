@@ -37,7 +37,10 @@ the picker updates automatically via `/api/models`.
 
 ## Run it (dev)
 
-Two terminals.
+**Quickest:** `./dev.sh` — starts the API + web client together. Edit any file
+and just refresh http://localhost:5173 (Vite hot-reloads; Ctrl-C stops both).
+
+Or run the two halves manually in separate terminals:
 
 **Server** (runs end-to-end on stubs — no heavy deps needed yet):
 ```bash
