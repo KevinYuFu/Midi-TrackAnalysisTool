@@ -7,6 +7,7 @@ import {
   type SweepMode,
   type Waveshape,
 } from './api/client'
+import { DragNumber } from './components/DragNumber'
 import { Knob } from './components/Knob'
 import { NoteStepper } from './components/NoteStepper'
 import { Selector } from './components/Selector'
@@ -138,15 +139,16 @@ export default function App() {
 
       <div className="card">
         <div className="module-body">
-          <Knob
-            label="BPM"
-            value={settings.bpm ?? 120}
-            min={60}
-            max={200}
-            step={1}
-            assumed={isAssumed('bpm')}
-            onChange={(v) => set({ bpm: v })}
-          />
+          <div className={`ctl${isAssumed('bpm') ? ' assumed' : ''}`}>
+            <label>BPM</label>
+            <DragNumber
+              value={settings.bpm ?? 120}
+              min={20}
+              max={300}
+              step={1}
+              onChange={(v) => set({ bpm: v })}
+            />
+          </div>
           <Knob
             label="Downbeat"
             value={settings.downbeat_ms}

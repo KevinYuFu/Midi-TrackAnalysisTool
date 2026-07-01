@@ -249,6 +249,27 @@ button:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; filter: n
 
 .actions { margin-top: 22px; }
 
+/* --- Ableton-style draggable / typeable number box --- */
+.dragnum,
+.dragnum-input {
+  min-width: 74px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.dragnum { user-select: none; }
+.dragnum:hover { border-color: var(--accent); }
+.dragnum-input { outline: none; }
+.dragnum-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.ctl.assumed .dragnum { border-color: var(--assumed); background: var(--assumed-bg); }
+
 /* --- Ableton-style root note picker --- */
 .note-stepper { position: relative; display: inline-flex; align-items: stretch; gap: 6px; }
 .note-value {
