@@ -1,36 +1,56 @@
-/* Design tokens. Black/white base with neon blue + purple accents.
-   Themes switch via `data-theme` on <html>. Add new themes as another block. */
+/* Design tokens. Modern plugin aesthetic (Serum 2 / spectral-comp vibe):
+   soft charcoal darks with subtle depth, neon blue + purple accents used
+   sparingly. Text stays a solid color — never gradient. */
 
 :root,
 [data-theme='dark'] {
-  --bg: #0a0a0b;
-  --surface: #141416;
-  --surface-2: #1c1c20;
-  --text: #f5f5f7;
-  --muted: #8a8a92;
-  --border: #26262b;
+  color-scheme: dark;
 
-  --accent-blue: #4d6bff;
-  --accent-purple: #a855f7;
-  --accent-gradient: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+  --bg: #14161b;
+  --bg-grad: radial-gradient(130% 100% at 50% -10%, #1e222b 0%, #16181e 55%, #111319 100%);
 
-  /* Assumed/auto-guessed values get the purple highlight. */
-  --assumed: #a855f7;
-  --assumed-bg: rgba(168, 85, 247, 0.12);
+  --surface: #1a1d24;
+  --surface-grad: linear-gradient(180deg, #23272f 0%, #1a1d24 100%);
+  --surface-2: #272c35;
+
+  --border: #2c313b;
+  --border-hi: rgba(255, 255, 255, 0.06);
+
+  --text: #e8eaf0;
+  --muted: #8b919e;
+
+  --accent: #5b7cfa;
+  --accent-2: #a274ff;
+  --accent-soft: rgba(91, 124, 250, 0.16);
+  --glow: 0 0 0 1px rgba(91, 124, 250, 0.35), 0 0 18px rgba(91, 124, 250, 0.32);
+  --shadow: 0 12px 34px rgba(0, 0, 0, 0.46);
+
+  --assumed: #a274ff;
+  --assumed-bg: rgba(162, 116, 255, 0.14);
 }
 
 [data-theme='light'] {
-  --bg: #f6f6f8;
+  color-scheme: light;
+
+  --bg: #e8ebf1;
+  --bg-grad: radial-gradient(130% 100% at 50% -10%, #f5f7fc 0%, #e8ebf1 62%);
+
   --surface: #ffffff;
-  --surface-2: #eeeef1;
-  --text: #0a0a0b;
-  --muted: #6b6b73;
-  --border: #e2e2e7;
+  --surface-grad: linear-gradient(180deg, #ffffff 0%, #f5f7fc 100%);
+  --surface-2: #eef1f7;
 
-  --accent-blue: #3b52ff;
-  --accent-purple: #9333ea;
-  --accent-gradient: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+  --border: #dde1ea;
+  --border-hi: rgba(255, 255, 255, 0.85);
 
-  --assumed: #9333ea;
-  --assumed-bg: rgba(147, 51, 234, 0.1);
+  --text: #1b1e26;
+  --muted: #6a7180;
+
+  --accent: #4361ee;
+  --accent-2: #8b4fe6;
+  --accent-soft: rgba(67, 97, 238, 0.12);
+  --glow: 0 0 0 1px rgba(67, 97, 238, 0.28), 0 0 16px rgba(67, 97, 238, 0.2);
+  --shadow: 0 12px 30px rgba(30, 41, 82, 0.1);
+
+  --assumed: #8b4fe6;
+  --assumed-bg: rgba(139, 79, 230, 0.1);
 }
