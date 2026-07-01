@@ -128,16 +128,16 @@ export default function App() {
             onChange={(e) => e.target.files?.[0] && onPick(e.target.files[0])}
           />
         </div>
-        {analyzing && <p className="muted" style={{ marginBottom: 0 }}>Analyzing…</p>}
-      </div>
+        {analyzing && <p className="muted" style={{ margin: '12px 0 0' }}>Analyzing…</p>}
 
-      {assumed.size > 0 ? (
-        <p className="muted hint">Purple label = auto-guessed — check those before converting.</p>
-      ) : (
-        <p className="muted hint">Load a track to auto-fill key / BPM. Tweak anything, then Convert.</p>
-      )}
+        {assumed.size > 0 ? (
+          <p className="muted hint">Purple label = auto-guessed — check those before converting.</p>
+        ) : (
+          <p className="muted hint">Load a track to auto-fill key / BPM. Tweak anything, then Convert.</p>
+        )}
 
-      <div className="card">
+        <div className="divider" />
+
         <div className="module-body">
           <div className={`ctl${isAssumed('bpm') ? ' assumed' : ''}`}>
             <label>BPM</label>
@@ -150,23 +150,26 @@ export default function App() {
             />
           </div>
           <Knob
-            label="Downbeat"
-            value={settings.downbeat_ms}
-            min={0}
-            max={2000}
-            step={5}
-            format={(v) => `${v} ms`}
-            onChange={(v) => set({ downbeat_ms: v })}
-          />
-          <Knob
             label="Period"
             value={PERIODS.indexOf(settings.period)}
             min={0}
             max={PERIODS.length - 1}
             step={1}
-            format={(v) => PERIODS[v] ?? '?'}
             assumed={isAssumed('period')}
             onChange={(v) => set({ period: PERIODS[v] })}
+            valueNode={
+              <select
+                className="knob-select"
+                value={settings.period}
+                onChange={(e) => set({ period: e.target.value })}
+              >
+                {PERIODS.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+            }
           />
 
           <div className={`ctl${isAssumed('root') ? ' assumed' : ''}`}>

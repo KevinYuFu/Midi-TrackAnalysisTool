@@ -144,6 +144,20 @@ button:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; filter: n
 .muted { color: var(--muted); font-size: 13px; }
 .hint { margin: 4px 2px 14px; }
 
+.divider { height: 1px; background: var(--border); margin: 18px 0; }
+
+/* Knob: circle + readout side by side so it lines up with other controls. */
+.ctl.knob { }
+.knob-body { display: flex; align-items: center; gap: 10px; }
+.knob-value {
+  font-size: 14px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  min-width: 40px;
+}
+.knob-select { padding: 8px 10px; font-size: 14px; min-width: 62px; }
+
 /* --- Synth rack of modules --- */
 .rack { display: flex; flex-direction: column; gap: 16px; }
 
