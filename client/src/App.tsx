@@ -10,7 +10,6 @@ import {
 import { DragNumber } from './components/DragNumber'
 import { Dropdown } from './components/Dropdown'
 import { Knob } from './components/Knob'
-import { NoteStepper } from './components/NoteStepper'
 import { Selector } from './components/Selector'
 import { SettingsPanel } from './components/SettingsPanel'
 import { WaveSelector } from './components/WaveSelector'
@@ -18,6 +17,20 @@ import { loadPreferences, savePreferences, type AppSettings } from './preference
 
 const PERIODS = ['1', '1/2', '1/4', '1/8', '1/16', '1/32'] // 1 = a full bar
 const SCALES = ['Major', 'Minor', 'Dorian', 'Phrygian']
+const ROOTS = [
+  { value: 'C', label: 'C' },
+  { value: 'C#', label: 'C#/Db' },
+  { value: 'D', label: 'D' },
+  { value: 'D#', label: 'D#/Eb' },
+  { value: 'E', label: 'E' },
+  { value: 'F', label: 'F' },
+  { value: 'F#', label: 'F#/Gb' },
+  { value: 'G', label: 'G' },
+  { value: 'G#', label: 'G#/Ab' },
+  { value: 'A', label: 'A' },
+  { value: 'A#', label: 'A#/Bb' },
+  { value: 'B', label: 'B' },
+]
 
 // Starting values so the controls are visible before any track loads.
 function defaultSettings(p: AppSettings): AnalysisSettings {
@@ -155,7 +168,12 @@ export default function App() {
 
           <div className={`ctl${isAssumed('root') ? ' assumed' : ''}`}>
             <label>Root</label>
-            <NoteStepper value={settings.root} onChange={(v) => set({ root: v })} />
+            <Dropdown
+              value={settings.root}
+              options={ROOTS}
+              width={100}
+              onChange={(v) => set({ root: v })}
+            />
           </div>
 
           <div className={`ctl${isAssumed('scale') ? ' assumed' : ''}`}>
