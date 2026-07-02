@@ -8,6 +8,7 @@ import {
   type Waveshape,
 } from './api/client'
 import { DragNumber } from './components/DragNumber'
+import { Dropdown } from './components/Dropdown'
 import { Knob } from './components/Knob'
 import { NoteStepper } from './components/NoteStepper'
 import { Selector } from './components/Selector'
@@ -158,17 +159,12 @@ export default function App() {
             assumed={isAssumed('period')}
             onChange={(v) => set({ period: PERIODS[v] })}
             valueNode={
-              <select
-                className="knob-select"
+              <Dropdown
                 value={settings.period}
-                onChange={(e) => set({ period: e.target.value })}
-              >
-                {PERIODS.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </select>
+                options={PERIODS}
+                width={72}
+                onChange={(v) => set({ period: v })}
+              />
             }
           />
 
@@ -179,13 +175,12 @@ export default function App() {
 
           <div className={`ctl${isAssumed('scale') ? ' assumed' : ''}`}>
             <label>Scale</label>
-            <select value={settings.scale} onChange={(e) => set({ scale: e.target.value })}>
-              {SCALES.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
+            <Dropdown
+              value={settings.scale}
+              options={SCALES}
+              width={168}
+              onChange={(v) => set({ scale: v })}
+            />
           </div>
 
           <div className="ctl">

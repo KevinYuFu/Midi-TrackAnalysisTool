@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getModels, type ModelInfo } from '../api/client'
 import type { AppSettings } from '../preferences'
+import { Dropdown } from './Dropdown'
 import { Knob } from './Knob'
 import { Toggle } from './Toggle'
 
@@ -32,27 +33,25 @@ export function SettingsPanel({ prefs, onChange, onClose }: Props) {
       <div className="module-body">
         <div className="ctl">
           <label>Theme</label>
-          <select
+          <Dropdown
             value={prefs.theme}
-            onChange={(e) => set({ theme: e.target.value as AppSettings['theme'] })}
-          >
-            <option value="dark">Dark</option>
-            <option value="light">Light</option>
-          </select>
+            width={130}
+            options={[
+              { value: 'dark', label: 'Dark' },
+              { value: 'light', label: 'Light' },
+            ]}
+            onChange={(v) => set({ theme: v as AppSettings['theme'] })}
+          />
         </div>
 
         <div className="ctl">
           <label>Stem model</label>
-          <select
+          <Dropdown
             value={prefs.separationModel}
-            onChange={(e) => set({ separationModel: e.target.value })}
-          >
-            {models.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </select>
+            width={200}
+            options={models.map((m) => ({ value: m.id, label: m.name }))}
+            onChange={(v) => set({ separationModel: v })}
+          />
         </div>
 
         <Knob
