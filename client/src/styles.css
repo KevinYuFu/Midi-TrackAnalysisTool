@@ -266,7 +266,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; filter: n
 /* --- Ableton-style draggable / typeable number box --- */
 .dragnum,
 .dragnum-input {
-  min-width: 74px;
+  width: 74px;
   padding: 10px 14px;
   border-radius: 10px;
   background: var(--surface-2);
