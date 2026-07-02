@@ -154,16 +154,9 @@ export default function App() {
             min={0}
             max={PERIODS.length - 1}
             step={1}
+            format={(v) => PERIODS[v] ?? '?'}
             assumed={isAssumed('period')}
             onChange={(v) => set({ period: PERIODS[v] })}
-            valueNode={
-              <Dropdown
-                value={settings.period}
-                options={PERIODS}
-                width={72}
-                onChange={(v) => set({ period: v })}
-              />
-            }
           />
 
           <div className={`ctl${isAssumed('root') ? ' assumed' : ''}`}>
