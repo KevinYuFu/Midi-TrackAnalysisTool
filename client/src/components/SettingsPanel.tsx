@@ -34,15 +34,32 @@ export function SettingsPanel({ prefs, onChange, onClose }: Props) {
       <div className="module-body">
         <div className="ctl">
           <label>Theme</label>
-          <Dropdown
-            value={prefs.theme}
-            width={130}
-            options={[
-              { value: 'dark', label: 'Dark' },
-              { value: 'light', label: 'Light' },
-            ]}
-            onChange={(v) => set({ theme: v as AppSettings['theme'] })}
-          />
+          <button
+            type="button"
+            className="ghost theme-toggle"
+            onClick={() => set({ theme: prefs.theme === 'dark' ? 'light' : 'dark' })}
+          >
+            {prefs.theme === 'dark' ? (
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
+                <path d="M13.5 9.6A5.6 5.6 0 0 1 6.4 2.5 5.6 5.6 0 1 0 13.5 9.6z" fill="currentColor" />
+              </svg>
+            ) : (
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                aria-hidden
+              >
+                <circle cx="8" cy="8" r="3.2" />
+                <path d="M8 1v1.6M8 13.4V15M1 8h1.6M13.4 8H15M3.2 3.2l1.1 1.1M11.7 11.7l1.1 1.1M12.8 3.2l-1.1 1.1M4.3 11.7l-1.1 1.1" />
+              </svg>
+            )}
+            <span>{prefs.theme === 'dark' ? 'Dark' : 'Light'}</span>
+          </button>
         </div>
 
         <div className="ctl">
