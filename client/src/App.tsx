@@ -17,22 +17,7 @@ import { WaveSelector } from './components/WaveSelector'
 import { loadPreferences, savePreferences, type AppSettings } from './preferences'
 
 const PERIODS = ['1', '1/2', '1/4', '1/8', '1/16', '1/32'] // 1 = a full bar
-const SCALES = [
-  'Major',
-  'Minor',
-  'Dorian',
-  'Phrygian',
-  'Lydian',
-  'Mixolydian',
-  'Locrian',
-  'Harmonic Minor',
-  'Melodic Minor',
-  'Major Pentatonic',
-  'Minor Pentatonic',
-  'Blues',
-  'Whole Tone',
-  'Chromatic',
-]
+const SCALES = ['Major', 'Minor', 'Dorian', 'Phrygian']
 
 // Starting values so the controls are visible before any track loads.
 function defaultSettings(p: AppSettings): AnalysisSettings {
@@ -178,7 +163,7 @@ export default function App() {
             <Dropdown
               value={settings.scale}
               options={SCALES}
-              width={168}
+              width={130}
               onChange={(v) => set({ scale: v })}
             />
           </div>
