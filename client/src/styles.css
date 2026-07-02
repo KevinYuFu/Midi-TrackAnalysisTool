@@ -118,8 +118,7 @@ button.ghost {
 }
 button.ghost:hover { border-color: var(--accent); box-shadow: none; filter: none; }
 button:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; filter: none; }
-.theme-toggle { display: inline-flex; align-items: center; gap: 8px; }
-.theme-toggle svg { color: var(--accent); }
+.theme-toggle { min-width: 72px; text-align: center; }
 
 .knobs { display: flex; gap: 36px; margin-top: 16px; }
 .knob-wrap {
