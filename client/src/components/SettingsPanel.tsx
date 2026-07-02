@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { getModels, type ModelInfo } from '../api/client'
+import { getModels, type ModelInfo, type SweepMode } from '../api/client'
 import type { AppSettings } from '../preferences'
 import { Dropdown } from './Dropdown'
 import { Knob } from './Knob'
+import { Selector } from './Selector'
 import { Toggle } from './Toggle'
 
 interface Props {
@@ -72,6 +73,19 @@ export function SettingsPanel({ prefs, onChange, onClose }: Props) {
           format={(v) => `${Math.round(v * 100)}%`}
           onChange={(v) => set({ harmonicStrength: v })}
         />
+
+        <div className="ctl">
+          <label>Pitch sweeps</label>
+          <Selector
+            value={prefs.sweepMode}
+            onChange={(v) => set({ sweepMode: v as SweepMode })}
+            options={[
+              { value: 'snap', label: 'Snap' },
+              { value: 'start_end', label: 'Start+End' },
+              { value: 'mpe', label: 'MPE' },
+            ]}
+          />
+        </div>
 
         <div className="ctl inline">
           <label>Velocity from FFT</label>

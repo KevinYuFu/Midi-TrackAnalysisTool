@@ -4,13 +4,11 @@ import {
   suggest,
   type AnalysisSettings,
   type SuggestedSettings,
-  type SweepMode,
   type Waveshape,
 } from './api/client'
 import { DragNumber } from './components/DragNumber'
 import { Dropdown } from './components/Dropdown'
 import { Knob } from './components/Knob'
-import { Selector } from './components/Selector'
 import { SettingsPanel } from './components/SettingsPanel'
 import { WaveSelector } from './components/WaveSelector'
 import { loadPreferences, savePreferences, type AppSettings } from './preferences'
@@ -41,7 +39,7 @@ function defaultSettings(p: AppSettings): AnalysisSettings {
     downbeat_ms: 0,
     period: '1/16',
     waveshape: 'saw',
-    sweep_mode: 'snap',
+    sweep_mode: p.sweepMode,
     separation_model: p.separationModel,
     threshold_db: p.thresholdDb,
     harmonic_strength: p.harmonicStrength,
@@ -90,6 +88,7 @@ export default function App() {
         threshold_db: prefs.thresholdDb,
         harmonic_strength: prefs.harmonicStrength,
         velocity_from_fft: prefs.velocityFromFft,
+        sweep_mode: prefs.sweepMode,
       }
       const blob = await process(file, payload)
       const url = URL.createObjectURL(blob)
@@ -184,19 +183,6 @@ export default function App() {
             <WaveSelector
               value={settings.waveshape}
               onChange={(v) => set({ waveshape: v as Waveshape })}
-            />
-          </div>
-
-          <div className="ctl">
-            <label>Pitch sweeps</label>
-            <Selector
-              value={settings.sweep_mode}
-              onChange={(v) => set({ sweep_mode: v as SweepMode })}
-              options={[
-                { value: 'snap', label: 'Snap' },
-                { value: 'start_end', label: 'Start+End' },
-                { value: 'mpe', label: 'MPE' },
-              ]}
             />
           </div>
         </div>

@@ -1,5 +1,7 @@
 // Global app preferences. Stored in localStorage for now; moves server-side
-// once accounts exist. Holds the "set once and forget" spectral params too.
+// once accounts exist. Holds the "set once and forget" params too.
+
+import type { SweepMode } from './api/client'
 
 export interface AppSettings {
   theme: 'dark' | 'light'
@@ -7,6 +9,7 @@ export interface AppSettings {
   thresholdDb: number
   harmonicStrength: number
   velocityFromFft: boolean
+  sweepMode: SweepMode
 }
 
 const KEY = 'a2m-preferences'
@@ -17,6 +20,7 @@ const DEFAULTS: AppSettings = {
   thresholdDb: -60,
   harmonicStrength: 0.7,
   velocityFromFft: true,
+  sweepMode: 'snap',
 }
 
 export function loadPreferences(): AppSettings {
