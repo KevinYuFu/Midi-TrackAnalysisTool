@@ -15,6 +15,7 @@
 
   --border: #2c313b;
   --border-hi: rgba(255, 255, 255, 0.06);
+  --border-strong: #3d4453;
 
   --text: #e8eaf0;
   --muted: #8b919e;
@@ -41,6 +42,7 @@
 
   --border: #dde1ea;
   --border-hi: rgba(255, 255, 255, 0.85);
+  --border-strong: #c2c8d4;
 
   --text: #1b1e26;
   --muted: #6a7180;

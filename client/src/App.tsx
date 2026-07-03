@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import {
   process,
   suggest,
@@ -11,6 +11,7 @@ import { Dropdown } from './components/Dropdown'
 import { Knob } from './components/Knob'
 import { SettingsPanel } from './components/SettingsPanel'
 import { WaveSelector } from './components/WaveSelector'
+import { Waveform } from './components/Waveform'
 import { loadPreferences, savePreferences, type AppSettings } from './preferences'
 
 const PERIODS = ['1', '1/2', '1/4', '1/8', '1/16', '1/32'] // 1 = a full bar
@@ -56,6 +57,7 @@ export default function App() {
   const [settings, setSettings] = useState<AnalysisSettings>(() => defaultSettings(prefs))
   const [analyzing, setAnalyzing] = useState(false)
   const [busy, setBusy] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   const assumed = useMemo(() => new Set(suggestion?.assumed_fields ?? []), [suggestion])
   const isAssumed = (f: string) => assumed.has(f)
@@ -118,21 +120,26 @@ export default function App() {
       )}
 
       <div className="card">
-        <div className="ctl">
-          <label>Track</label>
-          <input
-            type="file"
-            accept="audio/*"
-            onChange={(e) => e.target.files?.[0] && onPick(e.target.files[0])}
-          />
-        </div>
-        {analyzing && <p className="muted" style={{ margin: '12px 0 0' }}>Analyzing…</p>}
+        <Waveform
+          file={file}
+          bpm={settings.bpm ?? 120}
+          downbeatMs={settings.downbeat_ms}
+          onDownbeatChange={(ms) => set({ downbeat_ms: ms })}
+        />
 
-        {assumed.size > 0 ? (
-          <p className="muted hint">Purple label = auto-guessed — check those before converting.</p>
-        ) : (
-          <p className="muted hint">Load a track to auto-fill key / BPM. Tweak anything, then Convert.</p>
-        )}
+        <button type="button" className="track-loader" onClick={() => fileRef.current?.click()}>
+          <span className={`track-name${file ? '' : ' empty'}`}>
+            {file ? file.name : 'Load a track'}
+          </span>
+          <span className="track-cta">{file ? 'Change' : 'Browse'}</span>
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="audio/*"
+          hidden
+          onChange={(e) => e.target.files?.[0] && onPick(e.target.files[0])}
+        />
 
         <div className="divider" />
 
