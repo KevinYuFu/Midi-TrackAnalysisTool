@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 interface Band {
   lo: number
@@ -18,6 +18,14 @@ const MAX_ZOOM = 400
 const CANVAS_H = 140
 
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v))
+
+// Keep the visible window inside the track. At zoom 1 it's pinned; zoomed in the
+// center can range so the window sweeps start -> end.
+function clampCenterVal(c: number, visibleLen: number, duration: number) {
+  if (duration <= 0 || visibleLen >= duration) return 0.5
+  const half = visibleLen / 2 / duration
+  return clamp(c, half, 1 - half)
+}
 
 async function renderBand(
   buffer: AudioBuffer,
@@ -87,6 +95,7 @@ function draw(
   duration: number,
   viewStart: number,
   visibleLen: number,
+  offsetSec: number,
 ) {
   const dpr = window.devicePixelRatio || 1
   const cssW = canvas.clientWidth
@@ -102,7 +111,6 @@ function draw(
   const midY = cssH / 2
   const cx = Math.round(cssW / 2)
 
-  // Waveform: one screen column per pixel, aggregating the peaks it covers.
   if (peaks && peaks.length > 0 && visibleLen > 0) {
     const n = peaks.length
     g.lineWidth = 1
@@ -140,26 +148,30 @@ function draw(
     g.stroke()
   }
 
-  // Beatgrid — fixed on screen, downbeat at the center playhead, beats radiating out.
-  if (bpm > 0 && visibleLen > 0) {
-    const beatPx = (60 / bpm) * (cssW / visibleLen)
-    if (beatPx > 3) {
-      for (let k = 0; k * beatPx <= cssW / 2 + beatPx; k++) {
-        const isDown = k % 4 === 0
+  // Beatgrid — anchored to the track at the downbeat offset, so it scrolls with
+  // the audio during playback.
+  if (bpm > 0 && visibleLen > 0 && duration > 0) {
+    const pxPerSec = cssW / visibleLen
+    const beat = 60 / bpm
+    let k = Math.floor((viewStart - offsetSec) / beat) - 1
+    while (true) {
+      const t = offsetSec + k * beat
+      const x = (t - viewStart) * pxPerSec
+      if (x > cssW) break
+      if (x >= 0 && t >= 0 && t <= duration) {
+        const isDown = (((k % 4) + 4) % 4) === 0
         g.strokeStyle = isDown ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.2)'
         g.lineWidth = isDown ? 1.5 : 1
-        for (const x of k === 0 ? [cx] : [cx + k * beatPx, cx - k * beatPx]) {
-          if (x < 0 || x > cssW) continue
-          g.beginPath()
-          g.moveTo(x, 0)
-          g.lineTo(x, cssH)
-          g.stroke()
-        }
+        g.beginPath()
+        g.moveTo(x, 0)
+        g.lineTo(x, cssH)
+        g.stroke()
       }
+      k++
     }
   }
 
-  // Playhead at center.
+  // Fixed playhead at center.
   g.strokeStyle = '#5b7cfa'
   g.lineWidth = 2
   g.beginPath()
@@ -168,29 +180,39 @@ function draw(
   g.stroke()
 }
 
-// Rekordbox-style deck: high-def waveform, scroll/slider zoom, scrollbar scrub,
-// centered playhead, and play-from-selection. Panning aligns a downbeat to the
-// playhead, which sets the offset.
+// Rekordbox-style deck. Drag the waveform to align a downbeat to the center
+// playhead (sets the offset). Scroll wheel / scrollbar navigate. Spacebar plays
+// from the playhead and scrolls the waveform past it so you can watch alignment.
 export function Waveform({ file, bpm, onDownbeatChange }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+
   const [peaks, setPeaks] = useState<Band[] | null>(null)
   const [duration, setDuration] = useState(0)
   const [zoom, setZoom] = useState(1)
   const [centerFrac, setCenterFrac] = useState(0.5)
+  const [offsetSec, setOffsetSec] = useState(0)
   const [playing, setPlaying] = useState(false)
+  const [scrolling, setScrolling] = useState(false)
 
   const zoomRef = useRef(1)
   const centerRef = useRef(0.5)
+  const durationRef = useRef(0)
+  const playingRef = useRef(false)
+  const onDbRef = useRef(onDownbeatChange)
   useEffect(() => {
     zoomRef.current = zoom
   }, [zoom])
   useEffect(() => {
     centerRef.current = centerFrac
   }, [centerFrac])
-
-  const audioRef = useRef<HTMLAudioElement | null>(null)
-  const onDbRef = useRef(onDownbeatChange)
+  useEffect(() => {
+    durationRef.current = duration
+  }, [duration])
+  useEffect(() => {
+    playingRef.current = playing
+  }, [playing])
   useEffect(() => {
     onDbRef.current = onDownbeatChange
   })
@@ -203,6 +225,7 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
     }
     setZoom(1)
     setCenterFrac(0.5)
+    setOffsetSec(0)
     setPlaying(false)
     let cancelled = false
     analyze(file)
@@ -232,35 +255,35 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
   }, [file])
 
   const visibleLen = duration > 0 ? duration / zoom : 0
-  // Keep the visible window inside the track: at zoom 1 it's pinned (nothing to
-  // scroll); zoomed in, the center can range so the window sweeps start->end.
-  const clampCenter = (c: number) => {
-    if (duration <= 0 || visibleLen >= duration) return 0.5
-    const half = visibleLen / 2 / duration
-    return clamp(c, half, 1 - half)
-  }
-  const eCenter = clampCenter(centerFrac)
+  const eCenter = clampCenterVal(centerFrac, visibleLen, duration)
   const viewStart = eCenter * duration - visibleLen / 2
 
-  // Report the offset (downbeat phase = center time mod one bar).
+  // Report offset up whenever it changes.
   useEffect(() => {
-    if (!duration) return
+    onDbRef.current(Math.round(offsetSec * 1000))
+  }, [offsetSec])
+
+  // Re-derive the offset from the current center when BPM (or the track) changes,
+  // unless we're mid-playback.
+  useEffect(() => {
+    if (!duration || playingRef.current) return
+    const vLen = duration / zoomRef.current
+    const c = clampCenterVal(centerRef.current, vLen, duration)
     const barSec = (60 / (bpm || 120)) * 4
-    const centerTime = eCenter * duration
-    const off = ((centerTime % barSec) + barSec) % barSec
-    onDbRef.current(Math.round(off * 1000))
-  }, [eCenter, duration, bpm])
+    const ct = c * duration
+    setOffsetSec(((ct % barSec) + barSec) % barSec)
+  }, [bpm, duration])
 
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
-    const render = () => draw(canvas, peaks, bpm, duration, viewStart, visibleLen)
+    const render = () => draw(canvas, peaks, bpm, duration, viewStart, visibleLen, offsetSec)
     render()
     window.addEventListener('resize', render)
     return () => window.removeEventListener('resize', render)
-  }, [peaks, bpm, duration, viewStart, visibleLen])
+  }, [peaks, bpm, duration, viewStart, visibleLen, offsetSec])
 
-  // Wheel: vertical = zoom (around center), horizontal / shift = pan.
+  // Wheel: vertical = zoom (around center); horizontal / shift = navigate.
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -281,7 +304,49 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
     return () => canvas.removeEventListener('wheel', onWheel)
   }, [duration])
 
-  // Drag the waveform to pan.
+  // Follow playback: scroll the waveform so the playing time sits at the playhead.
+  useEffect(() => {
+    if (!playing || !duration) return
+    const audio = audioRef.current
+    if (!audio) return
+    let raf = 0
+    const tick = () => {
+      setCenterFrac(clamp(audio.currentTime / duration, 0, 1))
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [playing, duration])
+
+  const togglePlay = useCallback(() => {
+    const audio = audioRef.current
+    const dur = durationRef.current
+    if (!audio || !dur) return
+    if (playingRef.current) {
+      audio.pause()
+      setPlaying(false)
+    } else {
+      const c = clampCenterVal(centerRef.current, dur / zoomRef.current, dur)
+      audio.currentTime = clamp(c * dur, 0, Math.max(0, dur - 0.05))
+      audio.play().then(() => setPlaying(true)).catch(() => {})
+    }
+  }, [])
+
+  // Spacebar = play/pause (unless typing in a field).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== 'Space') return
+      const el = document.activeElement as HTMLElement | null
+      const tag = el?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || el?.isContentEditable) return
+      e.preventDefault()
+      togglePlay()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [togglePlay])
+
+  // Drag the waveform to align: pan the view and keep a downbeat under the playhead.
   const drag = useRef<{ x: number; center: number } | null>(null)
   const onDown = (e: React.PointerEvent) => {
     ;(e.target as Element).setPointerCapture(e.pointerId)
@@ -291,15 +356,19 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
     const canvas = canvasRef.current
     if (!drag.current || !canvas || !duration) return
     const df = -((e.clientX - drag.current.x) / canvas.clientWidth) * (visibleLen / duration)
-    setCenterFrac(clamp(drag.current.center + df, 0, 1))
+    const newCenter = clamp(drag.current.center + df, 0, 1)
+    setCenterFrac(newCenter)
+    const c = clampCenterVal(newCenter, visibleLen, duration)
+    const barSec = (60 / (bpm || 120)) * 4
+    const ct = c * duration
+    setOffsetSec(((ct % barSec) + barSec) % barSec)
   }
   const onUp = () => {
     drag.current = null
   }
 
-  // Horizontal scrollbar.
+  // Horizontal scrollbar (navigate only).
   const scrollDrag = useRef(false)
-  const [scrolling, setScrolling] = useState(false)
   const scrollTo = (clientX: number) => {
     const track = scrollRef.current
     if (!track) return
@@ -339,18 +408,6 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
     zoomDrag.current = false
   }
 
-  const togglePlay = () => {
-    const audio = audioRef.current
-    if (!audio || !duration) return
-    if (playing) {
-      audio.pause()
-      setPlaying(false)
-    } else {
-      audio.currentTime = clamp(eCenter * duration, 0, Math.max(0, duration - 0.05))
-      audio.play().then(() => setPlaying(true)).catch(() => {})
-    }
-  }
-
   const thumbWidth = duration > 0 ? clamp(visibleLen / duration, 0.03, 1) : 1
   const thumbLeft = duration > 0 ? clamp(viewStart / duration, 0, 1 - thumbWidth) : 0
   const zoomFrac = Math.log(zoom) / Math.log(MAX_ZOOM)
@@ -387,21 +444,6 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
           className={`scroll-thumb${scrolling ? ' active' : ''}`}
           style={{ left: `${thumbLeft * 100}%`, width: `${thumbWidth * 100}%` }}
         />
-      </div>
-
-      <div className="transport">
-        <button className="play-btn" onClick={togglePlay} disabled={!file} aria-label="Play">
-          {playing ? (
-            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden>
-              <rect x="4" y="3" width="3" height="10" fill="currentColor" />
-              <rect x="9" y="3" width="3" height="10" fill="currentColor" />
-            </svg>
-          ) : (
-            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden>
-              <path d="M4.5 3l8 5-8 5z" fill="currentColor" />
-            </svg>
-          )}
-        </button>
       </div>
     </div>
   )
