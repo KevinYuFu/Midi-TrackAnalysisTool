@@ -148,17 +148,73 @@ button:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; filter: n
 .divider { height: 1px; background: var(--border); margin: 18px 0; }
 
 /* --- Rekordbox-style waveform + beatgrid --- */
-.waveform { margin: 0; }
-.waveform canvas {
+.deck { margin: 0; }
+.deck-body { display: flex; gap: 8px; align-items: stretch; }
+.deck-body canvas {
+  flex: 1;
+  min-width: 0;
   display: block;
-  width: 100%;
-  height: 130px;
   border: 1.5px solid var(--border-strong);
   border-radius: 12px;
   background: #0b0d11;
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
-  cursor: ew-resize;
+  cursor: grab;
 }
+.deck-body canvas:active { cursor: grabbing; }
+
+.zoom-slider {
+  position: relative;
+  flex-shrink: 0;
+  width: 22px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface-2);
+  cursor: ns-resize;
+  touch-action: none;
+}
+.zoom-thumb {
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  height: 26px;
+  border-radius: 6px;
+  background: var(--accent);
+}
+
+.scrollbar {
+  position: relative;
+  height: 12px;
+  margin-top: 8px;
+  border-radius: 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  touch-action: none;
+}
+.scroll-thumb {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  border-radius: 5px;
+  background: var(--border-strong);
+  min-width: 18px;
+}
+.scroll-thumb:hover { background: var(--accent); }
+
+.transport { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.play-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  box-shadow: none;
+}
+.play-btn:hover { box-shadow: var(--glow); filter: brightness(1.06); }
 
 /* Prominent track loader — the obvious first action, no caption needed. */
 .track-loader {

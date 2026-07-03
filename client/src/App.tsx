@@ -123,7 +123,6 @@ export default function App() {
         <Waveform
           file={file}
           bpm={settings.bpm ?? 120}
-          downbeatMs={settings.downbeat_ms}
           onDownbeatChange={(ms) => set({ downbeat_ms: ms })}
         />
 
