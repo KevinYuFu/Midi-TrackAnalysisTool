@@ -1,22 +1,26 @@
-// Global app preferences (theme, default model, defaults).
-// Stored in localStorage for now; moves server-side once accounts exist.
+// Global app preferences. Stored in localStorage for now; moves server-side
+// once accounts exist. Holds the "set once and forget" params too.
 
-import type { Waveshape } from './api/client'
+import type { SweepMode } from './api/client'
 
 export interface AppSettings {
   theme: 'dark' | 'light'
-  defaultModel: string
-  defaultThresholdDb: number
-  defaultWaveshape: Waveshape
+  separationModel: string
+  thresholdDb: number
+  harmonicStrength: number
+  velocityFromFft: boolean
+  sweepMode: SweepMode
 }
 
 const KEY = 'a2m-preferences'
 
 const DEFAULTS: AppSettings = {
   theme: 'dark',
-  defaultModel: 'demucs_htdemucs',
-  defaultThresholdDb: -60,
-  defaultWaveshape: 'saw',
+  separationModel: 'demucs_htdemucs',
+  thresholdDb: -60,
+  harmonicStrength: 0.7,
+  velocityFromFft: true,
+  sweepMode: 'snap',
 }
 
 export function loadPreferences(): AppSettings {

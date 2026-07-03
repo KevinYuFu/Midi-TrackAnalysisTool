@@ -1,15 +1,21 @@
 // Thin API layer. Mirrors the server's pydantic models.
 
 export type Waveshape = 'sine' | 'triangle' | 'saw' | 'square'
+export type SweepMode = 'snap' | 'start_end' | 'mpe'
 
 export interface AnalysisSettings {
-  key: string | null
+  root: string // "C".."B"
+  scale: string // "Major", "Minor", "Dorian", ...
   bpm: number | null
+  downbeat_ms: number
   period: string
   waveshape: Waveshape
-  threshold_db: number
-  stem: string
+  sweep_mode: SweepMode
   separation_model: string
+  // Spectral params — edited in Preferences, sent with each conversion.
+  threshold_db: number
+  harmonic_strength: number
+  velocity_from_fft: boolean
 }
 
 export interface SuggestedSettings {

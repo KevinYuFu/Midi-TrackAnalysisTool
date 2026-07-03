@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react'
-import { getModels, type ModelInfo } from '../api/client'
+import { getModels, type ModelInfo, type SweepMode } from '../api/client'
 import type { AppSettings } from '../preferences'
+import { Dropdown } from './Dropdown'
+import { Knob } from './Knob'
+import { Selector } from './Selector'
+import { Toggle } from './Toggle'
 
 interface Props {
   prefs: AppSettings
@@ -8,14 +12,15 @@ interface Props {
   onClose: () => void
 }
 
-// Global preferences: theme + default separation model live here (not in the
-// per-conversion popup). This is the "app defaults" surface.
+// Global preferences: theme, stem model, and the "set once" spectral params.
 export function SettingsPanel({ prefs, onChange, onClose }: Props) {
   const [models, setModels] = useState<ModelInfo[]>([])
 
   useEffect(() => {
     getModels().then(setModels).catch(() => setModels([]))
   }, [])
+
+  const set = (patch: Partial<AppSettings>) => onChange({ ...prefs, ...patch })
 
   return (
     <div className="card">
@@ -26,38 +31,68 @@ export function SettingsPanel({ prefs, onChange, onClose }: Props) {
         </button>
       </div>
 
-      <div className="row">
-        <div className="field">
+      <div className="module-body">
+        <div className="ctl">
           <label>Theme</label>
-          <select
-            value={prefs.theme}
-            onChange={(e) => onChange({ ...prefs, theme: e.target.value as AppSettings['theme'] })}
+          <button
+            type="button"
+            className="ghost theme-toggle"
+            onClick={() => set({ theme: prefs.theme === 'dark' ? 'light' : 'dark' })}
           >
-            <option value="dark">Dark</option>
-            <option value="light">Light</option>
-          </select>
+            {prefs.theme === 'dark' ? 'Dark' : 'Light'}
+          </button>
         </div>
 
-        <div className="field">
-          <label>Default stem model</label>
-          <select
-            value={prefs.defaultModel}
-            onChange={(e) => onChange({ ...prefs, defaultModel: e.target.value })}
-          >
-            {models.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </select>
+        <div className="ctl">
+          <label>Stem model</label>
+          <Dropdown
+            value={prefs.separationModel}
+            width={200}
+            options={models.map((m) => ({ value: m.id, label: m.name }))}
+            onChange={(v) => set({ separationModel: v })}
+          />
+        </div>
+
+        <Knob
+          label="Threshold"
+          value={prefs.thresholdDb}
+          min={-90}
+          max={0}
+          step={1}
+          format={(v) => `${v} dB`}
+          onChange={(v) => set({ thresholdDb: v })}
+        />
+        <Knob
+          label="Harmonic cut"
+          value={prefs.harmonicStrength}
+          min={0}
+          max={1}
+          step={0.01}
+          format={(v) => `${Math.round(v * 100)}%`}
+          onChange={(v) => set({ harmonicStrength: v })}
+        />
+
+        <div className="ctl">
+          <label>Pitch sweeps</label>
+          <Selector
+            value={prefs.sweepMode}
+            onChange={(v) => set({ sweepMode: v as SweepMode })}
+            options={[
+              { value: 'snap', label: 'Snap' },
+              { value: 'start_end', label: 'Start+End' },
+              { value: 'mpe', label: 'MPE' },
+            ]}
+          />
+        </div>
+
+        <div className="ctl inline">
+          <label>Velocity from FFT</label>
+          <Toggle
+            checked={prefs.velocityFromFft}
+            onChange={(v) => set({ velocityFromFft: v })}
+          />
         </div>
       </div>
-
-      {models.length > 0 && (
-        <p className="muted" style={{ marginTop: 12 }}>
-          {models.find((m) => m.id === prefs.defaultModel)?.description}
-        </p>
-      )}
     </div>
   )
 }

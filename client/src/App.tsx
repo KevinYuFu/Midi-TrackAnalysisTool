@@ -1,11 +1,51 @@
 import { useMemo, useState } from 'react'
-import { process, suggest, type AnalysisSettings, type SuggestedSettings } from './api/client'
+import {
+  process,
+  suggest,
+  type AnalysisSettings,
+  type SuggestedSettings,
+  type Waveshape,
+} from './api/client'
+import { DragNumber } from './components/DragNumber'
+import { Dropdown } from './components/Dropdown'
 import { Knob } from './components/Knob'
 import { SettingsPanel } from './components/SettingsPanel'
+import { WaveSelector } from './components/WaveSelector'
 import { loadPreferences, savePreferences, type AppSettings } from './preferences'
 
-const PERIODS = ['1/4', '1/8', '1/16', '1/32', '1'] // 1 = a full bar
-const WAVES = ['sine', 'triangle', 'saw', 'square'] as const
+const PERIODS = ['1', '1/2', '1/4', '1/8', '1/16', '1/32'] // 1 = a full bar
+const SCALES = ['Major', 'Minor', 'Dorian', 'Phrygian']
+const ROOTS = [
+  { value: 'C', label: 'C' },
+  { value: 'C#', label: 'C#/Db' },
+  { value: 'D', label: 'D' },
+  { value: 'D#', label: 'D#/Eb' },
+  { value: 'E', label: 'E' },
+  { value: 'F', label: 'F' },
+  { value: 'F#', label: 'F#/Gb' },
+  { value: 'G', label: 'G' },
+  { value: 'G#', label: 'G#/Ab' },
+  { value: 'A', label: 'A' },
+  { value: 'A#', label: 'A#/Bb' },
+  { value: 'B', label: 'B' },
+]
+
+// Starting values so the controls are visible before any track loads.
+function defaultSettings(p: AppSettings): AnalysisSettings {
+  return {
+    root: 'C',
+    scale: 'Minor',
+    bpm: 120,
+    downbeat_ms: 0,
+    period: '1/16',
+    waveshape: 'saw',
+    sweep_mode: p.sweepMode,
+    separation_model: p.separationModel,
+    threshold_db: p.thresholdDb,
+    harmonic_strength: p.harmonicStrength,
+    velocity_from_fft: p.velocityFromFft,
+  }
+}
 
 export default function App() {
   const [prefs, setPrefs] = useState<AppSettings>(loadPreferences)
@@ -13,7 +53,8 @@ export default function App() {
 
   const [file, setFile] = useState<File | null>(null)
   const [suggestion, setSuggestion] = useState<SuggestedSettings | null>(null)
-  const [settings, setSettings] = useState<AnalysisSettings | null>(null)
+  const [settings, setSettings] = useState<AnalysisSettings>(() => defaultSettings(prefs))
+  const [analyzing, setAnalyzing] = useState(false)
   const [busy, setBusy] = useState(false)
 
   const assumed = useMemo(() => new Set(suggestion?.assumed_fields ?? []), [suggestion])
@@ -26,25 +67,30 @@ export default function App() {
 
   async function onPick(f: File) {
     setFile(f)
-    setBusy(true)
+    setAnalyzing(true)
     try {
       const s = await suggest(f)
-      // Fold in the user's global defaults where the popup shows them.
-      s.settings.separation_model = prefs.defaultModel
-      s.settings.waveshape = prefs.defaultWaveshape
-      s.settings.threshold_db = prefs.defaultThresholdDb
       setSuggestion(s)
       setSettings(s.settings)
     } finally {
-      setBusy(false)
+      setAnalyzing(false)
     }
   }
 
   async function onConvert() {
-    if (!file || !settings) return
+    if (!file) return
     setBusy(true)
     try {
-      const blob = await process(file, settings)
+      // Spectral params live in Preferences — merge them into the payload.
+      const payload: AnalysisSettings = {
+        ...settings,
+        separation_model: prefs.separationModel,
+        threshold_db: prefs.thresholdDb,
+        harmonic_strength: prefs.harmonicStrength,
+        velocity_from_fft: prefs.velocityFromFft,
+        sweep_mode: prefs.sweepMode,
+      }
+      const blob = await process(file, payload)
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -56,8 +102,7 @@ export default function App() {
     }
   }
 
-  const set = (patch: Partial<AnalysisSettings>) =>
-    setSettings((s) => (s ? { ...s, ...patch } : s))
+  const set = (patch: Partial<AnalysisSettings>) => setSettings((s) => ({ ...s, ...patch }))
 
   return (
     <div className="app">
@@ -73,7 +118,7 @@ export default function App() {
       )}
 
       <div className="card">
-        <div className="field">
+        <div className="ctl">
           <label>Track</label>
           <input
             type="file"
@@ -81,75 +126,73 @@ export default function App() {
             onChange={(e) => e.target.files?.[0] && onPick(e.target.files[0])}
           />
         </div>
-        {busy && !settings && <p className="muted">Analyzing…</p>}
-      </div>
+        {analyzing && <p className="muted" style={{ margin: '12px 0 0' }}>Analyzing…</p>}
 
-      {settings && (
-        <div className="card">
-          <p className="muted" style={{ marginTop: 0 }}>
-            Purple = auto-guessed. Check these before converting.
-          </p>
+        {assumed.size > 0 ? (
+          <p className="muted hint">Purple label = auto-guessed — check those before converting.</p>
+        ) : (
+          <p className="muted hint">Load a track to auto-fill key / BPM. Tweak anything, then Convert.</p>
+        )}
 
-          <div className="row">
-            <div className={`field ${isAssumed('key') ? 'assumed' : ''}`}>
-              <label>Key</label>
-              <input
-                value={settings.key ?? ''}
-                placeholder="e.g. A minor"
-                onChange={(e) => set({ key: e.target.value })}
-              />
-            </div>
-            <div className={`field ${isAssumed('bpm') ? 'assumed' : ''}`}>
-              <label>BPM</label>
-              <input
-                type="number"
-                value={settings.bpm ?? ''}
-                onChange={(e) => set({ bpm: e.target.value ? Number(e.target.value) : null })}
-              />
-            </div>
-            <div className="field">
-              <label>Waveshape</label>
-              <select
-                value={settings.waveshape}
-                onChange={(e) => set({ waveshape: e.target.value as AnalysisSettings['waveshape'] })}
-              >
-                {WAVES.map((w) => (
-                  <option key={w} value={w}>
-                    {w}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
+        <div className="divider" />
 
-          <div className="knobs">
-            <Knob
-              label="Period"
-              value={PERIODS.indexOf(settings.period)}
-              min={0}
-              max={PERIODS.length - 1}
+        <div className="module-body">
+          <div className={`ctl${isAssumed('bpm') ? ' assumed' : ''}`}>
+            <label>BPM</label>
+            <DragNumber
+              value={settings.bpm ?? 120}
+              min={20}
+              max={300}
               step={1}
-              format={(v) => PERIODS[v] ?? '?'}
-              onChange={(v) => set({ period: PERIODS[v] })}
+              onChange={(v) => set({ bpm: v })}
             />
-            <Knob
-              label="Threshold"
-              value={settings.threshold_db}
-              min={-90}
-              max={0}
-              step={1}
-              format={(v) => `${v} dB`}
-              onChange={(v) => set({ threshold_db: v })}
+          </div>
+          <Knob
+            label="Period"
+            value={PERIODS.indexOf(settings.period)}
+            min={0}
+            max={PERIODS.length - 1}
+            step={1}
+            format={(v) => PERIODS[v] ?? '?'}
+            assumed={isAssumed('period')}
+            onChange={(v) => set({ period: PERIODS[v] })}
+          />
+
+          <div className={`ctl${isAssumed('root') ? ' assumed' : ''}`}>
+            <label>Root</label>
+            <Dropdown
+              value={settings.root}
+              options={ROOTS}
+              width={100}
+              onChange={(v) => set({ root: v })}
             />
           </div>
 
-          <div style={{ marginTop: 20 }}>
-            <button disabled={busy} onClick={onConvert}>
-              {busy ? 'Converting…' : 'Convert to MIDI'}
-            </button>
+          <div className={`ctl${isAssumed('scale') ? ' assumed' : ''}`}>
+            <label>Scale</label>
+            <Dropdown
+              value={settings.scale}
+              options={SCALES}
+              width={130}
+              onChange={(v) => set({ scale: v })}
+            />
+          </div>
+
+          <div className="ctl">
+            <label>Waveshape</label>
+            <WaveSelector
+              value={settings.waveshape}
+              onChange={(v) => set({ waveshape: v as Waveshape })}
+            />
           </div>
         </div>
-      )}
+      </div>
+
+      <div className="actions">
+        <button disabled={busy || analyzing || !file} onClick={onConvert}>
+          {busy ? 'Converting…' : 'Convert to MIDI'}
+        </button>
+      </div>
     </div>
   )
 }

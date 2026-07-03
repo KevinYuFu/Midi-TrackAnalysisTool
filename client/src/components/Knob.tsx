@@ -1,4 +1,5 @@
 import { useCallback, useRef } from 'react'
+import type { ReactNode } from 'react'
 
 interface KnobProps {
   label: string
@@ -7,13 +8,15 @@ interface KnobProps {
   max: number
   step?: number
   format?: (v: number) => string
+  valueNode?: ReactNode // custom readout (e.g. a dropdown) instead of plain text
+  assumed?: boolean
   onChange: (v: number) => void
 }
 
-const SIZE = 76
+const SIZE = 48
 const C = SIZE / 2
-const R_ARC = 28
-const R_BODY = 19
+const R_ARC = 18
+const R_BODY = 11
 const A0 = -135 // sweep start (deg, 0 = 12 o'clock)
 const A1 = 135 // sweep end
 
@@ -30,8 +33,19 @@ function arc(r: number, from: number, to: number) {
 }
 
 // Serum-style rotary: value arc + glow, gradient body, indicator line.
-// Drag vertically to change (up = increase). Use for continuous values.
-export function Knob({ label, value, min, max, step = 1, format, onChange }: KnobProps) {
+// Label sits on top; the readout sits to the right so it lines up with the
+// other controls. Drag vertically to change (up = increase).
+export function Knob({
+  label,
+  value,
+  min,
+  max,
+  step = 1,
+  format,
+  valueNode,
+  assumed,
+  onChange,
+}: KnobProps) {
   const drag = useRef<{ y: number; value: number } | null>(null)
 
   const clamp = (v: number) => Math.min(max, Math.max(min, v))
@@ -61,48 +75,50 @@ export function Knob({ label, value, min, max, step = 1, format, onChange }: Kno
 
   const pct = (value - min) / (max - min)
   const aVal = A0 + pct * (A1 - A0)
-  const ind = polar(R_BODY - 4, aVal)
+  const ind = polar(R_BODY - 3, aVal)
 
   return (
-    <div className="knob-wrap">
-      <svg
-        width={SIZE}
-        height={SIZE}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        style={{ cursor: 'ns-resize', touchAction: 'none' }}
-      >
-        <defs>
-          <radialGradient id="knobBody" cx="38%" cy="30%" r="80%">
-            <stop offset="0%" stopColor="var(--surface-2)" />
-            <stop offset="100%" stopColor="var(--surface)" />
-          </radialGradient>
-        </defs>
+    <div className={`ctl knob${assumed ? ' assumed' : ''}`}>
+      <label>{label}</label>
+      <div className="knob-body">
+        <svg
+          width={SIZE}
+          height={SIZE}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          style={{ cursor: 'ns-resize', touchAction: 'none' }}
+        >
+          <defs>
+            <radialGradient id="knobBody" cx="38%" cy="30%" r="80%">
+              <stop offset="0%" stopColor="var(--surface-2)" />
+              <stop offset="100%" stopColor="var(--surface)" />
+            </radialGradient>
+          </defs>
 
-        <path d={arc(R_ARC, A0, A1)} fill="none" stroke="var(--border)" strokeWidth="4" strokeLinecap="round" />
-        <path
-          d={arc(R_ARC, A0, aVal)}
-          fill="none"
-          stroke="var(--accent)"
-          strokeWidth="4"
-          strokeLinecap="round"
-          style={{ filter: 'drop-shadow(0 0 4px var(--accent))' }}
-        />
+          <path d={arc(R_ARC, A0, A1)} fill="none" stroke="var(--border)" strokeWidth="3.5" strokeLinecap="round" />
+          <path
+            d={arc(R_ARC, A0, aVal)}
+            fill="none"
+            stroke="var(--accent)"
+            strokeWidth="3.5"
+            strokeLinecap="round"
+            style={{ filter: 'drop-shadow(0 0 3px var(--accent))' }}
+          />
 
-        <circle cx={C} cy={C} r={R_BODY} fill="url(#knobBody)" stroke="var(--border)" />
-        <line
-          x1={C}
-          y1={C}
-          x2={ind.x}
-          y2={ind.y}
-          stroke="var(--accent)"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-        />
-      </svg>
-      <span className="knob-label">{label}</span>
-      <span className="knob-value">{format ? format(value) : value}</span>
+          <circle cx={C} cy={C} r={R_BODY} fill="url(#knobBody)" stroke="var(--border)" />
+          <line
+            x1={C}
+            y1={C}
+            x2={ind.x}
+            y2={ind.y}
+            stroke="var(--accent)"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+        </svg>
+        {valueNode ?? <span className="knob-value">{format ? format(value) : value}</span>}
+      </div>
     </div>
   )
 }

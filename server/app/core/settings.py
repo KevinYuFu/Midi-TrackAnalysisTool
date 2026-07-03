@@ -2,10 +2,9 @@
 
 Two distinct layers, deliberately kept separate:
 
-- `AnalysisSettings`  — per-conversion parameters (the knob popup). These change
-  every time you analyze a track.
-- `AppSettings`       — global user preferences (theme, default model, defaults).
-  These are set once in the preferences panel and stored client-side for now.
+- `AnalysisSettings`  — per-conversion parameters sent with each track.
+- `AppSettings`       — global user preferences (theme, model, spectral params),
+  stored client-side for now.
 """
 from __future__ import annotations
 
@@ -21,33 +20,45 @@ class Waveshape(str, Enum):
     square = "square"
 
 
-class AnalysisSettings(BaseModel):
-    """Per-conversion parameters. `None` means "let the server guess"."""
+class SweepMode(str, Enum):
+    snap = "snap"            # snap a pitch sweep to the note it lands on
+    start_end = "start_end"  # emit start + end notes
+    mpe = "mpe"              # full per-note pitch bend (MPE)
 
-    key: str | None = None            # e.g. "A minor"; None => auto-detect
+
+class AnalysisSettings(BaseModel):
+    """Per-conversion parameters. The tool analyzes all stems together."""
+
+    root: str = "C"                   # key root, e.g. "A"
+    scale: str = "Minor"             # scale name, e.g. "Minor", "Dorian"
     bpm: float | None = None          # None => auto-detect
-    period: str = "1/16"              # sync division: 1/4, 1/8, 1/16, 1/32 ... 1 (bar)
+    downbeat_ms: float = 0.0          # where beat 1 sits (ms) — anchors period sync
+    period: str = "1/16"             # sync division: 1/4, 1/8, 1/16, 1/32 ... 1 (bar)
     waveshape: Waveshape = Waveshape.saw
-    threshold_db: float = -60.0       # spectral noise floor; ignore quieter content
-    stem: str = "bass"               # which separated stem to analyze
+    sweep_mode: SweepMode = SweepMode.snap
     separation_model: str = "demucs_htdemucs"
+
+    # Spectral params (edited in Preferences on the client).
+    threshold_db: float = -60.0       # spectral noise floor
+    harmonic_strength: float = 0.7    # 0..1 — how hard to subtract harmonic templates
+    velocity_from_fft: bool = True    # derive velocity from spectral energy
+
+    # Internal: unison/detune peaks are clustered automatically (not user-facing).
+    unison_cluster: float = 0.5
 
 
 class SuggestedSettings(BaseModel):
-    """Server's first-pass guess plus which fields were assumed.
-
-    The client highlights `assumed_fields` in the popup so the user knows what
-    to double-check before running the main algorithm.
-    """
+    """Server's first-pass guess plus which fields were assumed (for highlighting)."""
 
     settings: AnalysisSettings
     assumed_fields: list[str] = Field(default_factory=list)
 
 
 class AppSettings(BaseModel):
-    """Global preferences. Persisted client-side (localStorage) for now."""
+    """Global preferences mirror. Persisted client-side (localStorage) for now."""
 
     theme: str = "dark"
-    default_separation_model: str = "demucs_htdemucs"
-    default_threshold_db: float = -60.0
-    default_waveshape: Waveshape = Waveshape.saw
+    separation_model: str = "demucs_htdemucs"
+    threshold_db: float = -60.0
+    harmonic_strength: float = 0.7
+    velocity_from_fft: bool = True
