@@ -49,7 +49,13 @@ async function renderBand(
 async function analyze(
   file: File,
   ctx: BaseAudioContext,
-): Promise<{ peaks: Band[]; duration: number; buffer: AudioBuffer }> {
+): Promise<{
+  peaks: Band[]
+  duration: number
+  buffer: AudioBuffer
+  onset: Float32Array
+  onsetRate: number
+}> {
   const arrayBuf = await file.arrayBuffer()
   const audioBuf = await ctx.decodeAudioData(arrayBuf)
 
@@ -86,7 +92,60 @@ async function analyze(
     p.mid /= gmax
     p.hi /= gmax
   }
-  return { peaks, duration: audioBuf.duration, buffer: audioBuf }
+
+  // Onset envelope from the low band (kick transients) for beat-phase detection.
+  const onsetRate = 350
+  const hop = Math.max(1, Math.round(ANALYZE_RATE / onsetRate))
+  const frames = Math.floor(len / hop)
+  const onset = new Float32Array(frames)
+  let prevE = 0
+  for (let f = 0; f < frames; f++) {
+    let e = 0
+    const s = f * hop
+    const en = Math.min(len, s + hop)
+    for (let i = s; i < en; i++) {
+      const v = lo[i]
+      e += v * v
+    }
+    onset[f] = e > prevE ? e - prevE : 0
+    prevE = e
+  }
+
+  return { peaks, duration: audioBuf.duration, buffer: audioBuf, onset, onsetRate }
+}
+
+// Given a BPM, find the bar-phase (downbeat offset, seconds) whose beat grid best
+// lines up with the detected onsets — i.e. snap the grid onto the real kicks.
+function estimateOffset(
+  onset: Float32Array,
+  onsetRate: number,
+  bpm: number,
+  duration: number,
+): number {
+  const bar = (60 / bpm) * 4
+  if (!(bar > 0) || onset.length === 0) return 0
+  const P = 720
+  const acc = new Float32Array(P)
+  for (let f = 0; f < onset.length; f++) {
+    const t = f / onsetRate
+    if (t > duration) break
+    let ph = t % bar
+    if (ph < 0) ph += bar
+    acc[Math.min(P - 1, Math.floor((ph / bar) * P))] += onset[f]
+  }
+  // Circular smoothing so a single jittery frame doesn't win.
+  let best = -1
+  let bi = 0
+  const w = 4
+  for (let i = 0; i < P; i++) {
+    let s = 0
+    for (let j = -w; j <= w; j++) s += acc[(((i + j) % P) + P) % P]
+    if (s > best) {
+      best = s
+      bi = i
+    }
+  }
+  return ((bi + 0.5) / P) * bar
 }
 
 function draw(
@@ -193,6 +252,7 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
   // Web Audio playback (sample-accurate clock).
   const playCtxRef = useRef<AudioContext | null>(null)
   const bufferRef = useRef<AudioBuffer | null>(null)
+  const onsetRef = useRef<{ onset: Float32Array; onsetRate: number } | null>(null)
   const srcRef = useRef<AudioBufferSourceNode | null>(null)
   const playInfoRef = useRef<{ startCtx: number; startOffset: number } | null>(null)
   const resumeCenterRef = useRef(0.5)
@@ -269,9 +329,10 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
     setPlaying(false)
     let cancelled = false
     analyze(file, getCtx())
-      .then(({ peaks, duration, buffer }) => {
+      .then(({ peaks, duration, buffer, onset, onsetRate }) => {
         if (cancelled) return
         bufferRef.current = buffer
+        onsetRef.current = { onset, onsetRate }
         setPeaks(peaks)
         setDuration(duration)
       })
@@ -298,15 +359,12 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
     onDbRef.current(Math.round(offsetSec * 1000))
   }, [offsetSec])
 
-  // Re-derive the offset from the current center when BPM (or the track) changes,
-  // unless we're mid-playback.
+  // Auto-align the grid to the detected kick onsets for the current BPM.
   useEffect(() => {
     if (!duration || playingRef.current) return
-    const vLen = duration / zoomRef.current
-    const c = clampCenterVal(centerRef.current, vLen, duration)
-    const barSec = (60 / (bpm || 120)) * 4
-    const ct = c * duration
-    setOffsetSec(((ct % barSec) + barSec) % barSec)
+    const info = onsetRef.current
+    if (!info) return
+    setOffsetSec(estimateOffset(info.onset, info.onsetRate, bpm || 120, duration))
   }, [bpm, duration])
 
   useEffect(() => {
