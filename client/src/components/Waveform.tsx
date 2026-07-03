@@ -232,16 +232,24 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
   }, [file])
 
   const visibleLen = duration > 0 ? duration / zoom : 0
-  const viewStart = centerFrac * duration - visibleLen / 2
+  // Keep the visible window inside the track: at zoom 1 it's pinned (nothing to
+  // scroll); zoomed in, the center can range so the window sweeps start->end.
+  const clampCenter = (c: number) => {
+    if (duration <= 0 || visibleLen >= duration) return 0.5
+    const half = visibleLen / 2 / duration
+    return clamp(c, half, 1 - half)
+  }
+  const eCenter = clampCenter(centerFrac)
+  const viewStart = eCenter * duration - visibleLen / 2
 
   // Report the offset (downbeat phase = center time mod one bar).
   useEffect(() => {
     if (!duration) return
     const barSec = (60 / (bpm || 120)) * 4
-    const centerTime = centerFrac * duration
+    const centerTime = eCenter * duration
     const off = ((centerTime % barSec) + barSec) % barSec
     onDbRef.current(Math.round(off * 1000))
-  }, [centerFrac, duration, bpm])
+  }, [eCenter, duration, bpm])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -335,14 +343,13 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
       audio.pause()
       setPlaying(false)
     } else {
-      audio.currentTime = clamp(centerFrac * duration, 0, Math.max(0, duration - 0.05))
+      audio.currentTime = clamp(eCenter * duration, 0, Math.max(0, duration - 0.05))
       audio.play().then(() => setPlaying(true)).catch(() => {})
     }
   }
 
-  const thumbLeft = clamp(viewStart / (duration || 1), 0, 1)
-  const thumbRight = clamp((viewStart + visibleLen) / (duration || 1), 0, 1)
-  const thumbWidth = Math.max(thumbRight - thumbLeft, 0.03)
+  const thumbWidth = duration > 0 ? clamp(visibleLen / duration, 0.03, 1) : 1
+  const thumbLeft = duration > 0 ? clamp(viewStart / duration, 0, 1 - thumbWidth) : 0
   const zoomFrac = Math.log(zoom) / Math.log(MAX_ZOOM)
 
   return (
@@ -362,7 +369,7 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
           onPointerMove={onZoomMove}
           onPointerUp={onZoomUp}
         >
-          <div className="zoom-thumb" style={{ bottom: `calc(${zoomFrac * 100}% - 13px)` }} />
+          <div className="zoom-thumb" style={{ bottom: `calc(${zoomFrac} * (100% - 26px))` }} />
         </div>
       </div>
 
