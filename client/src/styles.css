@@ -199,7 +199,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; filter: n
   background: var(--border-strong);
   min-width: 18px;
 }
-.scroll-thumb:hover { background: var(--accent); }
+.scroll-thumb:hover,
+.scroll-thumb.active { background: var(--accent); }
 
 .transport { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
 .play-btn {

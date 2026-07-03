@@ -299,6 +299,7 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
 
   // Horizontal scrollbar.
   const scrollDrag = useRef(false)
+  const [scrolling, setScrolling] = useState(false)
   const scrollTo = (clientX: number) => {
     const track = scrollRef.current
     if (!track) return
@@ -308,6 +309,7 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
   const onScrollDown = (e: React.PointerEvent) => {
     ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
     scrollDrag.current = true
+    setScrolling(true)
     scrollTo(e.clientX)
   }
   const onScrollMove = (e: React.PointerEvent) => {
@@ -315,6 +317,7 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
   }
   const onScrollUp = () => {
     scrollDrag.current = false
+    setScrolling(false)
   }
 
   // Vertical zoom slider (top = max zoom).
@@ -369,7 +372,7 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
           onPointerMove={onZoomMove}
           onPointerUp={onZoomUp}
         >
-          <div className="zoom-thumb" style={{ bottom: `calc(${zoomFrac} * (100% - 26px))` }} />
+          <div className="zoom-thumb" style={{ bottom: `calc(3px + ${zoomFrac} * (100% - 32px))` }} />
         </div>
       </div>
 
@@ -381,7 +384,7 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
         onPointerUp={onScrollUp}
       >
         <div
-          className="scroll-thumb"
+          className={`scroll-thumb${scrolling ? ' active' : ''}`}
           style={{ left: `${thumbLeft * 100}%`, width: `${thumbWidth * 100}%` }}
         />
       </div>
