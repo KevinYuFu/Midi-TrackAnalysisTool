@@ -79,7 +79,7 @@ async function analyze(file: File): Promise<{ peaks: Band[]; duration: number }>
 
 function draw(
   canvas: HTMLCanvasElement,
-  peaks: Band[],
+  peaks: Band[] | null,
   bpm: number,
   downbeatMs: number,
   duration: number,
@@ -96,6 +96,18 @@ function draw(
   g.clearRect(0, 0, cssW, cssH)
 
   const midY = cssH / 2
+
+  // Empty state: just a faint centerline.
+  if (!peaks || peaks.length === 0) {
+    g.strokeStyle = 'rgba(255,255,255,0.12)'
+    g.lineWidth = 1
+    g.beginPath()
+    g.moveTo(0, midY)
+    g.lineTo(cssW, midY)
+    g.stroke()
+    return
+  }
+
   const n = peaks.length
 
   // Waveform — colored by frequency band (R=lows, G=mids, B=highs).
@@ -169,14 +181,12 @@ export function Waveform({ file, bpm, downbeatMs, onDownbeatChange }: Props) {
 
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas || !peaks) return
+    if (!canvas) return
     const render = () => draw(canvas, peaks, bpm, downbeatMs, duration)
     render()
     window.addEventListener('resize', render)
     return () => window.removeEventListener('resize', render)
   }, [peaks, bpm, downbeatMs, duration])
-
-  if (!file) return null
 
   const barLenMs = (60 / (bpm || 120)) * 4 * 1000
   const onDown = (e: React.PointerEvent) => {
@@ -205,7 +215,11 @@ export function Waveform({ file, bpm, downbeatMs, onDownbeatChange }: Props) {
         style={{ touchAction: 'none' }}
       />
       <p className="muted waveform-hint">
-        {loading ? 'Rendering waveform…' : `Drag to align the grid · downbeat ${Math.round(downbeatMs)} ms`}
+        {!file
+          ? 'Load a track to see its waveform.'
+          : loading
+            ? 'Rendering waveform…'
+            : `Drag to align the grid · downbeat ${Math.round(downbeatMs)} ms`}
       </p>
     </div>
   )
