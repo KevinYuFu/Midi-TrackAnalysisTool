@@ -154,7 +154,6 @@ export function Waveform({ file, bpm, downbeatMs, onDownbeatChange }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [peaks, setPeaks] = useState<Band[] | null>(null)
   const [duration, setDuration] = useState(0)
-  const [loading, setLoading] = useState(false)
   const drag = useRef<{ x: number; ms: number } | null>(null)
 
   useEffect(() => {
@@ -163,7 +162,6 @@ export function Waveform({ file, bpm, downbeatMs, onDownbeatChange }: Props) {
       return
     }
     let cancelled = false
-    setLoading(true)
     analyze(file)
       .then(({ peaks, duration }) => {
         if (cancelled) return
@@ -171,9 +169,6 @@ export function Waveform({ file, bpm, downbeatMs, onDownbeatChange }: Props) {
         setDuration(duration)
       })
       .catch(() => {})
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
     return () => {
       cancelled = true
     }
@@ -214,13 +209,6 @@ export function Waveform({ file, bpm, downbeatMs, onDownbeatChange }: Props) {
         onPointerUp={onUp}
         style={{ touchAction: 'none' }}
       />
-      <p className="muted waveform-hint">
-        {!file
-          ? 'Load a track to see its waveform.'
-          : loading
-            ? 'Rendering waveform…'
-            : `Drag to align the grid · downbeat ${Math.round(downbeatMs)} ms`}
-      </p>
     </div>
   )
 }

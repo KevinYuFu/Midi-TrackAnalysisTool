@@ -127,26 +127,19 @@ export default function App() {
           onDownbeatChange={(ms) => set({ downbeat_ms: ms })}
         />
 
-        <div className="loader">
-          <button className="ghost" onClick={() => fileRef.current?.click()}>
-            {file ? 'Change track' : 'Load track'}
-          </button>
-          {file && <span className="filename">{file.name}</span>}
-          {analyzing && <span className="muted">Analyzing…</span>}
-          <input
-            ref={fileRef}
-            type="file"
-            accept="audio/*"
-            hidden
-            onChange={(e) => e.target.files?.[0] && onPick(e.target.files[0])}
-          />
-        </div>
-
-        {assumed.size > 0 ? (
-          <p className="muted hint">Purple label = auto-guessed — check those before converting.</p>
-        ) : (
-          <p className="muted hint">Load a track to auto-fill key / BPM. Tweak anything, then Convert.</p>
-        )}
+        <button type="button" className="track-loader" onClick={() => fileRef.current?.click()}>
+          <span className={`track-name${file ? '' : ' empty'}`}>
+            {file ? file.name : 'Load a track'}
+          </span>
+          <span className="track-cta">{file ? 'Change' : 'Browse'}</span>
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="audio/*"
+          hidden
+          onChange={(e) => e.target.files?.[0] && onPick(e.target.files[0])}
+        />
 
         <div className="divider" />
 
