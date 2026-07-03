@@ -102,8 +102,10 @@ function draw(
   const cssW = canvas.clientWidth
   const cssH = canvas.clientHeight
   if (cssW === 0) return
-  canvas.width = Math.round(cssW * dpr)
-  canvas.height = Math.round(cssH * dpr)
+  const wantW = Math.round(cssW * dpr)
+  const wantH = Math.round(cssH * dpr)
+  if (canvas.width !== wantW) canvas.width = wantW
+  if (canvas.height !== wantH) canvas.height = wantH
   const g = canvas.getContext('2d')
   if (!g) return
   g.setTransform(dpr, 0, 0, dpr, 0, 0)
@@ -227,9 +229,21 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
   const durationRef = useRef(0)
   const playingRef = useRef(false)
   const onDbRef = useRef(onDownbeatChange)
+  const peaksRef = useRef<Band[] | null>(null)
+  const bpmRef = useRef(bpm)
+  const offsetRef = useRef(0)
   useEffect(() => {
     zoomRef.current = zoom
   }, [zoom])
+  useEffect(() => {
+    peaksRef.current = peaks
+  }, [peaks])
+  useEffect(() => {
+    bpmRef.current = bpm
+  }, [bpm])
+  useEffect(() => {
+    offsetRef.current = offsetSec
+  }, [offsetSec])
   useEffect(() => {
     centerRef.current = centerFrac
   }, [centerFrac])
@@ -296,13 +310,14 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
   }, [bpm, duration])
 
   useEffect(() => {
+    if (playing) return // the rAF loop drives drawing during playback
     const canvas = canvasRef.current
     if (!canvas) return
     const render = () => draw(canvas, peaks, bpm, duration, viewStart, visibleLen, offsetSec)
     render()
     window.addEventListener('resize', render)
     return () => window.removeEventListener('resize', render)
-  }, [peaks, bpm, duration, viewStart, visibleLen, offsetSec])
+  }, [playing, peaks, bpm, duration, viewStart, visibleLen, offsetSec])
 
   // Wheel: vertical = zoom (around center); horizontal / shift = navigate.
   useEffect(() => {
@@ -330,14 +345,19 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
   useEffect(() => {
     if (!playing || !duration) return
     const ctx = playCtxRef.current
-    if (!ctx) return
+    const canvas = canvasRef.current
+    if (!ctx || !canvas) return
     let raf = 0
     const tick = () => {
       const info = playInfoRef.current
       if (info) {
         const latency = ctx.outputLatency || ctx.baseLatency || 0
-        const t = info.startOffset + (ctx.currentTime - info.startCtx) - latency
-        setCenterFrac(clamp(t / duration, 0, 1))
+        const dur = durationRef.current
+        const vLen = dur / zoomRef.current
+        const audioTime = info.startOffset + (ctx.currentTime - info.startCtx) - latency
+        // Draw straight from the audio clock — no React round-trip, no clamp, so
+        // the playhead tracks the audible position as tightly as possible.
+        draw(canvas, peaksRef.current, bpmRef.current, dur, audioTime - vLen / 2, vLen, offsetRef.current)
       }
       raf = requestAnimationFrame(tick)
     }
