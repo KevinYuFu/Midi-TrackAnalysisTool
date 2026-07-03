@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import {
   process,
   suggest,
@@ -57,6 +57,7 @@ export default function App() {
   const [settings, setSettings] = useState<AnalysisSettings>(() => defaultSettings(prefs))
   const [analyzing, setAnalyzing] = useState(false)
   const [busy, setBusy] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   const assumed = useMemo(() => new Set(suggestion?.assumed_fields ?? []), [suggestion])
   const isAssumed = (f: string) => assumed.has(f)
@@ -119,22 +120,27 @@ export default function App() {
       )}
 
       <div className="card">
-        <div className="ctl">
-          <label>Track</label>
-          <input
-            type="file"
-            accept="audio/*"
-            onChange={(e) => e.target.files?.[0] && onPick(e.target.files[0])}
-          />
-        </div>
-        {analyzing && <p className="muted" style={{ margin: '12px 0 0' }}>Analyzing…</p>}
-
         <Waveform
           file={file}
           bpm={settings.bpm ?? 120}
           downbeatMs={settings.downbeat_ms}
           onDownbeatChange={(ms) => set({ downbeat_ms: ms })}
         />
+
+        <div className="loader">
+          <button className="ghost" onClick={() => fileRef.current?.click()}>
+            {file ? 'Change track' : 'Load track'}
+          </button>
+          {file && <span className="filename">{file.name}</span>}
+          {analyzing && <span className="muted">Analyzing…</span>}
+          <input
+            ref={fileRef}
+            type="file"
+            accept="audio/*"
+            hidden
+            onChange={(e) => e.target.files?.[0] && onPick(e.target.files[0])}
+          />
+        </div>
 
         {assumed.size > 0 ? (
           <p className="muted hint">Purple label = auto-guessed — check those before converting.</p>

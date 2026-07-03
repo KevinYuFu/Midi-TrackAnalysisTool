@@ -160,6 +160,16 @@ button:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; filter: n
 }
 .waveform-hint { margin: 8px 2px 0; }
 
+.loader { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
+.filename {
+  font-size: 13px;
+  color: var(--text);
+  max-width: 340px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Knob: circle + readout side by side so it lines up with other controls. */
 .ctl.knob { }
 .knob-body { display: flex; align-items: center; gap: 10px; }
