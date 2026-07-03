@@ -11,6 +11,7 @@ import { Dropdown } from './components/Dropdown'
 import { Knob } from './components/Knob'
 import { SettingsPanel } from './components/SettingsPanel'
 import { WaveSelector } from './components/WaveSelector'
+import { Waveform } from './components/Waveform'
 import { loadPreferences, savePreferences, type AppSettings } from './preferences'
 
 const PERIODS = ['1', '1/2', '1/4', '1/8', '1/16', '1/32'] // 1 = a full bar
@@ -127,6 +128,13 @@ export default function App() {
           />
         </div>
         {analyzing && <p className="muted" style={{ margin: '12px 0 0' }}>Analyzing…</p>}
+
+        <Waveform
+          file={file}
+          bpm={settings.bpm ?? 120}
+          downbeatMs={settings.downbeat_ms}
+          onDownbeatChange={(ms) => set({ downbeat_ms: ms })}
+        />
 
         {assumed.size > 0 ? (
           <p className="muted hint">Purple label = auto-guessed — check those before converting.</p>
