@@ -13,10 +13,12 @@ interface Props {
   onDownbeatChange: (ms: number) => void
 }
 
-const COLUMNS = 1400
+const COLUMNS = 4000
 const ANALYZE_RATE = 11025 // downsample for cheap band analysis
+const MAX_ZOOM = 400
 
-// Render the buffer through one filter at a reduced sample rate (offline).
+const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v))
+
 async function renderBand(
   buffer: AudioBuffer,
   type: BiquadFilterType,
@@ -83,6 +85,8 @@ function draw(
   bpm: number,
   downbeatMs: number,
   duration: number,
+  viewStart: number,
+  visibleLen: number,
 ) {
   const dpr = window.devicePixelRatio || 1
   const cssW = canvas.clientWidth
@@ -97,8 +101,7 @@ function draw(
 
   const midY = cssH / 2
 
-  // Empty state: just a faint centerline.
-  if (!peaks || peaks.length === 0) {
+  if (!peaks || peaks.length === 0 || visibleLen <= 0) {
     g.strokeStyle = 'rgba(255,255,255,0.12)'
     g.lineWidth = 1
     g.beginPath()
@@ -110,57 +113,83 @@ function draw(
 
   const n = peaks.length
 
-  // Waveform — colored by frequency band (R=lows, G=mids, B=highs).
+  // Waveform — one screen column per pixel, aggregating the peaks it covers.
   g.lineWidth = 1
-  for (let c = 0; c < n; c++) {
-    const x = (c / n) * cssW
-    const p = peaks[c]
-    const amp = Math.max(p.lo, p.mid, p.hi)
+  for (let x = 0; x < cssW; x++) {
+    const t0 = viewStart + (x / cssW) * visibleLen
+    const t1 = viewStart + ((x + 1) / cssW) * visibleLen
+    let c0 = Math.floor((t0 / duration) * n)
+    let c1 = Math.ceil((t1 / duration) * n)
+    c0 = clamp(c0, 0, n - 1)
+    c1 = clamp(c1, c0 + 1, n)
+    let lo = 0
+    let mid = 0
+    let hi = 0
+    for (let c = c0; c < c1; c++) {
+      const p = peaks[c]
+      if (p.lo > lo) lo = p.lo
+      if (p.mid > mid) mid = p.mid
+      if (p.hi > hi) hi = p.hi
+    }
+    const amp = Math.max(lo, mid, hi)
     const h = amp * (cssH / 2 - 2)
-    const r = Math.round(255 * p.lo)
-    const gr = Math.round(255 * p.mid)
-    const b = Math.round(255 * p.hi)
-    g.strokeStyle = `rgb(${r},${gr},${b})`
+    g.strokeStyle = `rgb(${Math.round(255 * lo)},${Math.round(255 * mid)},${Math.round(255 * hi)})`
     g.beginPath()
-    g.moveTo(x, midY - h)
-    g.lineTo(x, midY + h)
+    g.moveTo(x + 0.5, midY - h)
+    g.lineTo(x + 0.5, midY + h)
     g.stroke()
   }
 
   // Beatgrid overlay, anchored at the downbeat.
-  if (duration > 0 && bpm > 0) {
-    const pxPerSec = cssW / duration
+  if (bpm > 0) {
+    const pxPerSec = cssW / visibleLen
     const beat = 60 / bpm
     const offset = downbeatMs / 1000
-    const kStart = Math.ceil((0 - offset) / beat)
-    for (let k = kStart; ; k++) {
+    let k = Math.floor((viewStart - offset) / beat) - 1
+    while (true) {
       const t = offset + k * beat
-      if (t > duration) break
-      if (t < 0) continue
-      const x = t * pxPerSec
-      const isDownbeat = (((k % 4) + 4) % 4) === 0
-      g.strokeStyle = isDownbeat ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.22)'
-      g.lineWidth = isDownbeat ? 2 : 1
-      g.beginPath()
-      g.moveTo(x, 0)
-      g.lineTo(x, cssH)
-      g.stroke()
+      const x = (t - viewStart) * pxPerSec
+      if (x > cssW) break
+      if (x >= 0 && t >= 0 && t <= duration) {
+        const isDownbeat = (((k % 4) + 4) % 4) === 0
+        g.strokeStyle = isDownbeat ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.22)'
+        g.lineWidth = isDownbeat ? 2 : 1
+        g.beginPath()
+        g.moveTo(x, 0)
+        g.lineTo(x, cssH)
+        g.stroke()
+      }
+      k++
     }
   }
 }
 
-// Rekordbox-style waveform + draggable beatgrid.
+// Rekordbox-style waveform with scroll-wheel zoom + draggable beatgrid.
 export function Waveform({ file, bpm, downbeatMs, onDownbeatChange }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [peaks, setPeaks] = useState<Band[] | null>(null)
   const [duration, setDuration] = useState(0)
+  const [zoom, setZoom] = useState(1)
+  const [startFrac, setStartFrac] = useState(0)
   const drag = useRef<{ x: number; ms: number } | null>(null)
+
+  // Latest zoom/pan for the (non-passive) wheel listener without re-binding it.
+  const zoomRef = useRef(1)
+  const startRef = useRef(0)
+  useEffect(() => {
+    zoomRef.current = zoom
+  }, [zoom])
+  useEffect(() => {
+    startRef.current = startFrac
+  }, [startFrac])
 
   useEffect(() => {
     if (!file) {
       setPeaks(null)
       return
     }
+    setZoom(1)
+    setStartFrac(0)
     let cancelled = false
     analyze(file)
       .then(({ peaks, duration }) => {
@@ -174,14 +203,49 @@ export function Waveform({ file, bpm, downbeatMs, onDownbeatChange }: Props) {
     }
   }, [file])
 
+  const visibleLen = duration > 0 ? duration / zoom : 0
+  const maxStart = Math.max(0, duration - visibleLen)
+  const viewStart = clamp(startFrac * duration, 0, maxStart)
+
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
-    const render = () => draw(canvas, peaks, bpm, downbeatMs, duration)
+    const render = () => draw(canvas, peaks, bpm, downbeatMs, duration, viewStart, visibleLen)
     render()
     window.addEventListener('resize', render)
     return () => window.removeEventListener('resize', render)
-  }, [peaks, bpm, downbeatMs, duration])
+  }, [peaks, bpm, downbeatMs, duration, viewStart, visibleLen])
+
+  // Scroll wheel: vertical = zoom toward cursor, horizontal / shift = pan.
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const onWheel = (e: WheelEvent) => {
+      if (!duration) return
+      e.preventDefault()
+      const cssW = canvas.clientWidth
+      const rect = canvas.getBoundingClientRect()
+      const mx = clamp(e.clientX - rect.left, 0, cssW)
+      const vLen = duration / zoomRef.current
+      const vStart = clamp(startRef.current * duration, 0, Math.max(0, duration - vLen))
+
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY) || e.shiftKey) {
+        const delta = e.shiftKey ? e.deltaY : e.deltaX
+        const newStart = clamp(vStart + (delta / cssW) * vLen, 0, Math.max(0, duration - vLen))
+        setStartFrac(newStart / duration)
+        return
+      }
+
+      const tCursor = vStart + (mx / cssW) * vLen
+      const newZoom = clamp(zoomRef.current * Math.exp(-e.deltaY * 0.0015), 1, MAX_ZOOM)
+      const newLen = duration / newZoom
+      const newStart = clamp(tCursor - (mx / cssW) * newLen, 0, Math.max(0, duration - newLen))
+      setZoom(newZoom)
+      setStartFrac(duration > 0 ? newStart / duration : 0)
+    }
+    canvas.addEventListener('wheel', onWheel, { passive: false })
+    return () => canvas.removeEventListener('wheel', onWheel)
+  }, [duration])
 
   const barLenMs = (60 / (bpm || 120)) * 4 * 1000
   const onDown = (e: React.PointerEvent) => {
@@ -191,7 +255,7 @@ export function Waveform({ file, bpm, downbeatMs, onDownbeatChange }: Props) {
   const onMove = (e: React.PointerEvent) => {
     const canvas = canvasRef.current
     if (!drag.current || !canvas || !duration) return
-    const dt = ((e.clientX - drag.current.x) / canvas.clientWidth) * duration * 1000
+    const dt = ((e.clientX - drag.current.x) / canvas.clientWidth) * visibleLen * 1000
     let ms = drag.current.ms + dt
     ms = ((ms % barLenMs) + barLenMs) % barLenMs
     onDownbeatChange(Math.round(ms))
