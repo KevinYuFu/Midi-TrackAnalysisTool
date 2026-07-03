@@ -46,11 +46,12 @@ async function renderBand(
   return rendered.getChannelData(0)
 }
 
-async function analyze(file: File): Promise<{ peaks: Band[]; duration: number }> {
+async function analyze(
+  file: File,
+  ctx: BaseAudioContext,
+): Promise<{ peaks: Band[]; duration: number; buffer: AudioBuffer }> {
   const arrayBuf = await file.arrayBuffer()
-  const ac = new AudioContext()
-  const audioBuf = await ac.decodeAudioData(arrayBuf)
-  ac.close()
+  const audioBuf = await ctx.decodeAudioData(arrayBuf)
 
   const [lo, mid, hi] = await Promise.all([
     renderBand(audioBuf, 'lowpass', 200),
@@ -85,7 +86,7 @@ async function analyze(file: File): Promise<{ peaks: Band[]; duration: number }>
     p.mid /= gmax
     p.hi /= gmax
   }
-  return { peaks, duration: audioBuf.duration }
+  return { peaks, duration: audioBuf.duration, buffer: audioBuf }
 }
 
 function draw(
@@ -186,7 +187,32 @@ function draw(
 export function Waveform({ file, bpm, onDownbeatChange }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
-  const audioRef = useRef<HTMLAudioElement | null>(null)
+
+  // Web Audio playback (sample-accurate clock).
+  const playCtxRef = useRef<AudioContext | null>(null)
+  const bufferRef = useRef<AudioBuffer | null>(null)
+  const srcRef = useRef<AudioBufferSourceNode | null>(null)
+  const playInfoRef = useRef<{ startCtx: number; startOffset: number } | null>(null)
+  const resumeCenterRef = useRef(0.5)
+  const stoppingRef = useRef(false)
+  const getCtx = () => {
+    if (!playCtxRef.current) playCtxRef.current = new AudioContext()
+    return playCtxRef.current
+  }
+  const stopSource = () => {
+    const src = srcRef.current
+    if (src) {
+      stoppingRef.current = true
+      try {
+        src.stop()
+      } catch {
+        // already stopped
+      }
+      src.disconnect()
+      srcRef.current = null
+    }
+    playInfoRef.current = null
+  }
 
   const [peaks, setPeaks] = useState<Band[] | null>(null)
   const [duration, setDuration] = useState(0)
@@ -228,31 +254,26 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
     setOffsetSec(0)
     setPlaying(false)
     let cancelled = false
-    analyze(file)
-      .then(({ peaks, duration }) => {
+    analyze(file, getCtx())
+      .then(({ peaks, duration, buffer }) => {
         if (cancelled) return
+        bufferRef.current = buffer
         setPeaks(peaks)
         setDuration(duration)
       })
       .catch(() => {})
     return () => {
       cancelled = true
+      stopSource()
     }
   }, [file])
 
-  // Playback element.
+  // Close the audio context on unmount.
   useEffect(() => {
-    if (!file) return
-    const url = URL.createObjectURL(file)
-    const audio = new Audio(url)
-    audio.addEventListener('ended', () => setPlaying(false))
-    audioRef.current = audio
     return () => {
-      audio.pause()
-      URL.revokeObjectURL(url)
-      audioRef.current = null
+      playCtxRef.current?.close().catch(() => {})
     }
-  }, [file])
+  }, [])
 
   const visibleLen = duration > 0 ? duration / zoom : 0
   const eCenter = clampCenterVal(centerFrac, visibleLen, duration)
@@ -304,14 +325,20 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
     return () => canvas.removeEventListener('wheel', onWheel)
   }, [duration])
 
-  // Follow playback: scroll the waveform so the playing time sits at the playhead.
+  // Follow playback: scroll the waveform so the *audible* time sits at the
+  // playhead. Uses the audio-context clock minus output latency for accuracy.
   useEffect(() => {
     if (!playing || !duration) return
-    const audio = audioRef.current
-    if (!audio) return
+    const ctx = playCtxRef.current
+    if (!ctx) return
     let raf = 0
     const tick = () => {
-      setCenterFrac(clamp(audio.currentTime / duration, 0, 1))
+      const info = playInfoRef.current
+      if (info) {
+        const latency = ctx.outputLatency || ctx.baseLatency || 0
+        const t = info.startOffset + (ctx.currentTime - info.startCtx) - latency
+        setCenterFrac(clamp(t / duration, 0, 1))
+      }
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
@@ -319,17 +346,33 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
   }, [playing, duration])
 
   const togglePlay = useCallback(() => {
-    const audio = audioRef.current
     const dur = durationRef.current
-    if (!audio || !dur) return
+    const buffer = bufferRef.current
+    if (!dur || !buffer) return
     if (playingRef.current) {
-      audio.pause()
+      stopSource()
       setPlaying(false)
-    } else {
-      const c = clampCenterVal(centerRef.current, dur / zoomRef.current, dur)
-      audio.currentTime = clamp(c * dur, 0, Math.max(0, dur - 0.05))
-      audio.play().then(() => setPlaying(true)).catch(() => {})
+      setCenterFrac(resumeCenterRef.current) // snap back to where we were looking
+      return
     }
+    const ctx = getCtx()
+    ctx.resume().catch(() => {})
+    resumeCenterRef.current = centerRef.current
+    const c = clampCenterVal(centerRef.current, dur / zoomRef.current, dur)
+    const startOffset = clamp(c * dur, 0, Math.max(0, dur - 0.05))
+    const src = ctx.createBufferSource()
+    src.buffer = buffer
+    src.connect(ctx.destination)
+    stoppingRef.current = false
+    src.onended = () => {
+      if (stoppingRef.current) return
+      setPlaying(false)
+      setCenterFrac(resumeCenterRef.current)
+    }
+    src.start(0, startOffset)
+    srcRef.current = src
+    playInfoRef.current = { startCtx: ctx.currentTime, startOffset }
+    setPlaying(true)
   }, [])
 
   // Spacebar = play/pause (unless typing in a field).
