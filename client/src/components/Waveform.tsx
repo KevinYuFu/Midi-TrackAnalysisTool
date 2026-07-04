@@ -304,7 +304,6 @@ function drawOverview(
 export function Waveform({ file, bpm, onDownbeatChange }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const overviewRef = useRef<HTMLCanvasElement>(null)
-  const scrollRef = useRef<HTMLDivElement>(null)
   const onsetRef = useRef<{ onset: Float32Array; onsetRate: number } | null>(null)
 
   const playCtxRef = useRef<AudioContext | null>(null)
@@ -317,7 +316,6 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
   const [zoom, setZoom] = useState(1)
   const [centerFrac, setCenterFrac] = useState(0.5)
   const [offsetSec, setOffsetSec] = useState(0)
-  const [scrolling, setScrolling] = useState(false)
   const [playing, setPlaying] = useState(false)
 
   const zoomRef = useRef(1)
@@ -581,28 +579,6 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
     drag.current = null
   }
 
-  // Horizontal scrollbar (navigate only).
-  const scrollDrag = useRef(false)
-  const scrollTo = (clientX: number) => {
-    const track = scrollRef.current
-    if (!track) return
-    const rect = track.getBoundingClientRect()
-    setCenterFrac(clampC(clamp((clientX - rect.left) / rect.width, 0, 1)))
-  }
-  const onScrollDown = (e: React.PointerEvent) => {
-    ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
-    scrollDrag.current = true
-    setScrolling(true)
-    scrollTo(e.clientX)
-  }
-  const onScrollMove = (e: React.PointerEvent) => {
-    if (scrollDrag.current) scrollTo(e.clientX)
-  }
-  const onScrollUp = () => {
-    scrollDrag.current = false
-    setScrolling(false)
-  }
-
   // Overview strip (navigate the whole track).
   const overviewDrag = useRef(false)
   const overviewTo = (clientX: number) => {
@@ -644,8 +620,6 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
     zoomDrag.current = false
   }
 
-  const thumbWidth = duration > 0 ? clamp(visibleLen / duration, 0.03, 1) : 1
-  const thumbLeft = duration > 0 ? clamp(viewStart / duration, 0, 1 - thumbWidth) : 0
   const zoomSpan = Math.log(MAX_ZOOM / zoomMin)
   const zoomFrac = zoomSpan > 0 ? Math.log(zoom / zoomMin) / zoomSpan : 0
 
@@ -668,19 +642,6 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
         >
           <div className="zoom-thumb" style={{ bottom: `calc(3px + ${zoomFrac} * (100% - 32px))` }} />
         </div>
-      </div>
-
-      <div
-        className="scrollbar"
-        ref={scrollRef}
-        onPointerDown={onScrollDown}
-        onPointerMove={onScrollMove}
-        onPointerUp={onScrollUp}
-      >
-        <div
-          className={`scroll-thumb${scrolling ? ' active' : ''}`}
-          style={{ left: `${thumbLeft * 100}%`, width: `${thumbWidth * 100}%` }}
-        />
       </div>
 
       <canvas
