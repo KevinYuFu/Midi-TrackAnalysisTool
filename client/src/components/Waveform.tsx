@@ -533,6 +533,20 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
     return () => canvas.removeEventListener('wheel', onWheel)
   }, [duration])
 
+  // Scroll wheel over the overview zooms too (around the current center).
+  useEffect(() => {
+    const ov = overviewRef.current
+    if (!ov) return
+    const onWheel = (e: WheelEvent) => {
+      if (!durationRef.current) return
+      e.preventDefault()
+      const zMin = zoomMinFor(durationRef.current)
+      setZoom((z) => clamp(z * Math.exp(-e.deltaY * 0.0015), zMin, MAX_ZOOM))
+    }
+    ov.addEventListener('wheel', onWheel, { passive: false })
+    return () => ov.removeEventListener('wheel', onWheel)
+  }, [])
+
   // Keyboard: Space = play/pause, Q/W = jump 4 bars.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
