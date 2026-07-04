@@ -202,6 +202,16 @@ button:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; filter: n
 .scroll-thumb:hover,
 .scroll-thumb.active { background: var(--accent); }
 
+.overview {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #0b0d11;
+  cursor: pointer;
+}
+
 .transport { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
 .calibrate { margin-top: 14px; }
 .play-btn {

@@ -16,7 +16,10 @@ const ANALYZE_RATE = 22050 // higher rate -> sharper transients (kick shape)
 const POINTS_PER_SEC = 1000 // ~1ms resolution per stored peak column
 const MAX_ZOOM = 400
 const CANVAS_H = 140
+const OVERVIEW_H = 44
 const JUMP_BEATS = 16 // 4 bars
+const DEFAULT_VISIBLE_SEC = 18 // ~9 bars @ 120 bpm — starting zoom
+const MAX_VISIBLE_SEC = 36 // cap how far out you can zoom
 
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v))
 
@@ -24,6 +27,10 @@ function clampCenterVal(c: number, visibleLen: number, duration: number) {
   if (duration <= 0 || visibleLen >= duration) return 0.5
   const half = visibleLen / 2 / duration
   return clamp(c, half, 1 - half)
+}
+
+function zoomMinFor(duration: number) {
+  return duration > 0 ? Math.max(1, duration / MAX_VISIBLE_SEC) : 1
 }
 
 async function renderBand(
@@ -143,6 +150,22 @@ function estimateOffset(
   return ((bi + 0.5) / P) * bar
 }
 
+function prep(canvas: HTMLCanvasElement): CanvasRenderingContext2D | null {
+  const dpr = window.devicePixelRatio || 1
+  const cssW = canvas.clientWidth
+  const cssH = canvas.clientHeight
+  if (cssW === 0) return null
+  const wantW = Math.round(cssW * dpr)
+  const wantH = Math.round(cssH * dpr)
+  if (canvas.width !== wantW) canvas.width = wantW
+  if (canvas.height !== wantH) canvas.height = wantH
+  const g = canvas.getContext('2d')
+  if (!g) return null
+  g.setTransform(dpr, 0, 0, dpr, 0, 0)
+  g.clearRect(0, 0, cssW, cssH)
+  return g
+}
+
 function draw(
   canvas: HTMLCanvasElement,
   peaks: Band[] | null,
@@ -152,19 +175,10 @@ function draw(
   visibleLen: number,
   offsetSec: number,
 ) {
-  const dpr = window.devicePixelRatio || 1
+  const g = prep(canvas)
+  if (!g) return
   const cssW = canvas.clientWidth
   const cssH = canvas.clientHeight
-  if (cssW === 0) return
-  const wantW = Math.round(cssW * dpr)
-  const wantH = Math.round(cssH * dpr)
-  if (canvas.width !== wantW) canvas.width = wantW
-  if (canvas.height !== wantH) canvas.height = wantH
-  const g = canvas.getContext('2d')
-  if (!g) return
-  g.setTransform(dpr, 0, 0, dpr, 0, 0)
-  g.clearRect(0, 0, cssW, cssH)
-
   const midY = cssH / 2
   const cx = Math.round(cssW / 2)
 
@@ -226,7 +240,6 @@ function draw(
     }
   }
 
-  // Center line / playhead.
   g.strokeStyle = '#5b7cfa'
   g.lineWidth = 2
   g.beginPath()
@@ -235,10 +248,62 @@ function draw(
   g.stroke()
 }
 
-// Waveform + beatgrid deck. Spacebar plays/pauses (pause keeps position),
-// Q/W jump back/forward 4 bars, drag aligns a downbeat under the center line.
+// Whole-track overview in mountain style (bottom-anchored, RGB), with a box for
+// the current view window.
+function drawOverview(
+  canvas: HTMLCanvasElement,
+  peaks: Band[] | null,
+  duration: number,
+  viewStart: number,
+  visibleLen: number,
+) {
+  const g = prep(canvas)
+  if (!g) return
+  const cssW = canvas.clientWidth
+  const cssH = canvas.clientHeight
+
+  if (peaks && peaks.length > 0 && duration > 0) {
+    const n = peaks.length
+    g.lineWidth = 1
+    for (let x = 0; x < cssW; x++) {
+      const c0 = clamp(Math.floor((x / cssW) * n), 0, n - 1)
+      const c1 = clamp(Math.ceil(((x + 1) / cssW) * n), c0 + 1, n)
+      let lo = 0
+      let mid = 0
+      let hi = 0
+      for (let c = c0; c < c1; c++) {
+        const p = peaks[c]
+        if (p.lo > lo) lo = p.lo
+        if (p.mid > mid) mid = p.mid
+        if (p.hi > hi) hi = p.hi
+      }
+      const amp = Math.max(lo, mid, hi)
+      const h = amp * (cssH - 2)
+      g.strokeStyle = `rgb(${Math.round(255 * lo)},${Math.round(255 * mid)},${Math.round(255 * hi)})`
+      g.beginPath()
+      g.moveTo(x + 0.5, cssH)
+      g.lineTo(x + 0.5, cssH - h)
+      g.stroke()
+    }
+  }
+
+  if (duration > 0 && visibleLen > 0) {
+    const x0 = clamp((viewStart / duration) * cssW, 0, cssW)
+    const x1 = clamp(((viewStart + visibleLen) / duration) * cssW, 0, cssW)
+    const w = Math.max(2, x1 - x0)
+    g.fillStyle = 'rgba(91,124,250,0.18)'
+    g.fillRect(x0, 0, w, cssH)
+    g.strokeStyle = 'rgba(91,124,250,0.9)'
+    g.lineWidth = 1
+    g.strokeRect(x0 + 0.5, 0.5, w - 1, cssH - 1)
+  }
+}
+
+// Waveform deck. Space plays/pauses (pause keeps position), Q/W jump 4 bars,
+// drag aligns a downbeat under the center line, overview strip navigates.
 export function Waveform({ file, bpm, onDownbeatChange }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const overviewRef = useRef<HTMLCanvasElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const onsetRef = useRef<{ onset: Float32Array; onsetRate: number } | null>(null)
 
@@ -368,7 +433,6 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
       setPeaks(null)
       return
     }
-    setZoom(1)
     setCenterFrac(0.5)
     setOffsetSec(0)
     setPlaying(false)
@@ -381,6 +445,7 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
         onsetRef.current = { onset, onsetRate }
         setPeaks(peaks)
         setDuration(duration)
+        setZoom(clamp(duration / DEFAULT_VISIBLE_SEC, zoomMinFor(duration), MAX_ZOOM))
       })
       .catch(() => {})
     return () => {
@@ -398,6 +463,8 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
   const visibleLen = duration > 0 ? duration / zoom : 0
   const eCenter = clampCenterVal(centerFrac, visibleLen, duration)
   const viewStart = eCenter * duration - visibleLen / 2
+  const zoomMin = zoomMinFor(duration)
+  const clampC = (c: number) => clampCenterVal(c, visibleLen, duration)
 
   useEffect(() => {
     onDbRef.current(Math.round(offsetSec * 1000))
@@ -416,7 +483,11 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
     if (playing) return
     const canvas = canvasRef.current
     if (!canvas) return
-    const render = () => draw(canvas, peaks, bpm, duration, viewStart, visibleLen, offsetSec)
+    const render = () => {
+      draw(canvas, peaks, bpm, duration, viewStart, visibleLen, offsetSec)
+      const ov = overviewRef.current
+      if (ov) drawOverview(ov, peaks, duration, viewStart, visibleLen)
+    }
     render()
     window.addEventListener('resize', render)
     return () => window.removeEventListener('resize', render)
@@ -436,7 +507,10 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
         const dur = durationRef.current
         const vLen = dur / zoomRef.current
         const audioTime = info.startOffset + (ctx.currentTime - info.startCtx) - latency
-        draw(canvas, peaksRef.current, bpmRef.current, dur, audioTime - vLen / 2, vLen, offsetRef.current)
+        const vs = audioTime - vLen / 2
+        draw(canvas, peaksRef.current, bpmRef.current, dur, vs, vLen, offsetRef.current)
+        const ov = overviewRef.current
+        if (ov) drawOverview(ov, peaksRef.current, dur, vs, vLen)
       }
       raf = requestAnimationFrame(tick)
     }
@@ -456,9 +530,10 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
       if (Math.abs(e.deltaX) > Math.abs(e.deltaY) || e.shiftKey) {
         const delta = e.shiftKey ? e.deltaY : e.deltaX
         const df = (delta / cssW) * (vLen / duration)
-        setCenterFrac((f) => clamp(f + df, 0, 1))
+        setCenterFrac((f) => clampCenterVal(f + df, vLen, duration))
       } else {
-        setZoom((z) => clamp(z * Math.exp(-e.deltaY * 0.0015), 1, MAX_ZOOM))
+        const zMin = zoomMinFor(durationRef.current)
+        setZoom((z) => clamp(z * Math.exp(-e.deltaY * 0.0015), zMin, MAX_ZOOM))
       }
     }
     canvas.addEventListener('wheel', onWheel, { passive: false })
@@ -496,11 +571,10 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
     const canvas = canvasRef.current
     if (!drag.current || !canvas || !duration) return
     const df = -((e.clientX - drag.current.x) / canvas.clientWidth) * (visibleLen / duration)
-    const newCenter = clamp(drag.current.center + df, 0, 1)
+    const newCenter = clampC(clamp(drag.current.center + df, 0, 1))
     setCenterFrac(newCenter)
-    const c = clampCenterVal(newCenter, visibleLen, duration)
     const barSec = (60 / (bpm || 120)) * 4
-    const ct = c * duration
+    const ct = newCenter * duration
     setOffsetSec(((ct % barSec) + barSec) % barSec)
   }
   const onUp = () => {
@@ -513,7 +587,7 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
     const track = scrollRef.current
     if (!track) return
     const rect = track.getBoundingClientRect()
-    setCenterFrac(clamp((clientX - rect.left) / rect.width, 0, 1))
+    setCenterFrac(clampC(clamp((clientX - rect.left) / rect.width, 0, 1)))
   }
   const onScrollDown = (e: React.PointerEvent) => {
     ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
@@ -529,12 +603,34 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
     setScrolling(false)
   }
 
+  // Overview strip (navigate the whole track).
+  const overviewDrag = useRef(false)
+  const overviewTo = (clientX: number) => {
+    const cv = overviewRef.current
+    if (!cv) return
+    const rect = cv.getBoundingClientRect()
+    setCenterFrac(clampC(clamp((clientX - rect.left) / rect.width, 0, 1)))
+  }
+  const onOverviewDown = (e: React.PointerEvent) => {
+    ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
+    overviewDrag.current = true
+    overviewTo(e.clientX)
+  }
+  const onOverviewMove = (e: React.PointerEvent) => {
+    if (overviewDrag.current) overviewTo(e.clientX)
+  }
+  const onOverviewUp = () => {
+    overviewDrag.current = false
+  }
+
   // Vertical zoom slider (top = max zoom).
   const zoomDrag = useRef(false)
   const zoomTo = (clientY: number, el: Element) => {
     const rect = el.getBoundingClientRect()
     const frac = clamp(1 - (clientY - rect.top) / rect.height, 0, 1)
-    setZoom(clamp(Math.exp(frac * Math.log(MAX_ZOOM)), 1, MAX_ZOOM))
+    const zMin = zoomMinFor(durationRef.current)
+    const span = Math.max(0, Math.log(MAX_ZOOM / zMin))
+    setZoom(clamp(zMin * Math.exp(frac * span), zMin, MAX_ZOOM))
   }
   const onZoomDown = (e: React.PointerEvent) => {
     ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
@@ -550,7 +646,8 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
 
   const thumbWidth = duration > 0 ? clamp(visibleLen / duration, 0.03, 1) : 1
   const thumbLeft = duration > 0 ? clamp(viewStart / duration, 0, 1 - thumbWidth) : 0
-  const zoomFrac = Math.log(zoom) / Math.log(MAX_ZOOM)
+  const zoomSpan = Math.log(MAX_ZOOM / zoomMin)
+  const zoomFrac = zoomSpan > 0 ? Math.log(zoom / zoomMin) / zoomSpan : 0
 
   return (
     <div className="deck">
@@ -585,6 +682,15 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
           style={{ left: `${thumbLeft * 100}%`, width: `${thumbWidth * 100}%` }}
         />
       </div>
+
+      <canvas
+        ref={overviewRef}
+        className="overview"
+        style={{ height: OVERVIEW_H, touchAction: 'none' }}
+        onPointerDown={onOverviewDown}
+        onPointerMove={onOverviewMove}
+        onPointerUp={onOverviewUp}
+      />
     </div>
   )
 }
