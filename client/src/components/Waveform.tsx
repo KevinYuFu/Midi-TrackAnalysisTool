@@ -23,12 +23,6 @@ const MAX_VISIBLE_SEC = 36 // cap how far out you can zoom
 
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v))
 
-function clampCenterVal(c: number, visibleLen: number, duration: number) {
-  if (duration <= 0 || visibleLen >= duration) return 0.5
-  const half = visibleLen / 2 / duration
-  return clamp(c, half, 1 - half)
-}
-
 function zoomMinFor(duration: number) {
   return duration > 0 ? Math.max(1, duration / MAX_VISIBLE_SEC) : 1
 }
@@ -459,10 +453,12 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
   }, [])
 
   const visibleLen = duration > 0 ? duration / zoom : 0
-  const eCenter = clampCenterVal(centerFrac, visibleLen, duration)
+  // Center is free across [0,1] so the playhead can reach the very start/end
+  // (the view runs off the track edges into empty space, like during playback).
+  const eCenter = clamp(centerFrac, 0, 1)
   const viewStart = eCenter * duration - visibleLen / 2
   const zoomMin = zoomMinFor(duration)
-  const clampC = (c: number) => clampCenterVal(c, visibleLen, duration)
+  const clampC = (c: number) => clamp(c, 0, 1)
 
   useEffect(() => {
     onDbRef.current(Math.round(offsetSec * 1000))
@@ -528,7 +524,7 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
       if (Math.abs(e.deltaX) > Math.abs(e.deltaY) || e.shiftKey) {
         const delta = e.shiftKey ? e.deltaY : e.deltaX
         const df = (delta / cssW) * (vLen / duration)
-        setCenterFrac((f) => clampCenterVal(f + df, vLen, duration))
+        setCenterFrac((f) => clamp(f + df, 0, 1))
       } else {
         const zMin = zoomMinFor(durationRef.current)
         setZoom((z) => clamp(z * Math.exp(-e.deltaY * 0.0015), zMin, MAX_ZOOM))
