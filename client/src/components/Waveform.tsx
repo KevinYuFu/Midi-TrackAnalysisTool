@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 interface Band {
   lo: number
@@ -48,16 +48,11 @@ async function renderBand(
 
 async function analyze(
   file: File,
-  ctx: BaseAudioContext,
-): Promise<{
-  peaks: Band[]
-  duration: number
-  buffer: AudioBuffer
-  onset: Float32Array
-  onsetRate: number
-}> {
+): Promise<{ peaks: Band[]; duration: number; onset: Float32Array; onsetRate: number }> {
   const arrayBuf = await file.arrayBuffer()
-  const audioBuf = await ctx.decodeAudioData(arrayBuf)
+  const ac = new AudioContext()
+  const audioBuf = await ac.decodeAudioData(arrayBuf)
+  ac.close()
 
   const [lo, mid, hi] = await Promise.all([
     renderBand(audioBuf, 'lowpass', 200),
@@ -111,7 +106,7 @@ async function analyze(
     prevE = e
   }
 
-  return { peaks, duration: audioBuf.duration, buffer: audioBuf, onset, onsetRate }
+  return { peaks, duration: audioBuf.duration, onset, onsetRate }
 }
 
 // Given a BPM, find the bar-phase (downbeat offset, seconds) whose beat grid best
@@ -133,7 +128,6 @@ function estimateOffset(
     if (ph < 0) ph += bar
     acc[Math.min(P - 1, Math.floor((ph / bar) * P))] += onset[f]
   }
-  // Circular smoothing so a single jittery frame doesn't win.
   let best = -1
   let bi = 0
   const w = 4
@@ -210,8 +204,7 @@ function draw(
     g.stroke()
   }
 
-  // Beatgrid — anchored to the track at the downbeat offset, so it scrolls with
-  // the audio during playback.
+  // Beatgrid — anchored to the track at the downbeat offset.
   if (bpm > 0 && visibleLen > 0 && duration > 0) {
     const pxPerSec = cssW / visibleLen
     const beat = 60 / bpm
@@ -233,7 +226,7 @@ function draw(
     }
   }
 
-  // Fixed playhead at center.
+  // Center reference line — drag a downbeat under this to align.
   g.strokeStyle = '#5b7cfa'
   g.lineWidth = 2
   g.beginPath()
@@ -242,77 +235,26 @@ function draw(
   g.stroke()
 }
 
-// Rekordbox-style deck. Drag the waveform to align a downbeat to the center
-// playhead (sets the offset). Scroll wheel / scrollbar navigate. Spacebar plays
-// from the playhead and scrolls the waveform past it so you can watch alignment.
+// Waveform + beatgrid aligner. Drag the waveform so a downbeat sits under the
+// center line to set the offset; onset detection auto-places it first. Playback
+// is intentionally disabled for now (spacebar is reserved but inert).
 export function Waveform({ file, bpm, onDownbeatChange }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
-
-  // Web Audio playback (sample-accurate clock).
-  const playCtxRef = useRef<AudioContext | null>(null)
-  const bufferRef = useRef<AudioBuffer | null>(null)
   const onsetRef = useRef<{ onset: Float32Array; onsetRate: number } | null>(null)
-  const srcRef = useRef<AudioBufferSourceNode | null>(null)
-  const playInfoRef = useRef<{ startCtx: number; startOffset: number } | null>(null)
-  const resumeCenterRef = useRef(0.5)
-  const stoppingRef = useRef(false)
-  const getCtx = () => {
-    if (!playCtxRef.current) playCtxRef.current = new AudioContext()
-    return playCtxRef.current
-  }
-  const stopSource = () => {
-    const src = srcRef.current
-    if (src) {
-      stoppingRef.current = true
-      try {
-        src.stop()
-      } catch {
-        // already stopped
-      }
-      src.disconnect()
-      srcRef.current = null
-    }
-    playInfoRef.current = null
-  }
 
   const [peaks, setPeaks] = useState<Band[] | null>(null)
   const [duration, setDuration] = useState(0)
   const [zoom, setZoom] = useState(1)
   const [centerFrac, setCenterFrac] = useState(0.5)
   const [offsetSec, setOffsetSec] = useState(0)
-  const [playing, setPlaying] = useState(false)
   const [scrolling, setScrolling] = useState(false)
 
   const zoomRef = useRef(1)
-  const centerRef = useRef(0.5)
-  const durationRef = useRef(0)
-  const playingRef = useRef(false)
   const onDbRef = useRef(onDownbeatChange)
-  const peaksRef = useRef<Band[] | null>(null)
-  const bpmRef = useRef(bpm)
-  const offsetRef = useRef(0)
   useEffect(() => {
     zoomRef.current = zoom
   }, [zoom])
-  useEffect(() => {
-    peaksRef.current = peaks
-  }, [peaks])
-  useEffect(() => {
-    bpmRef.current = bpm
-  }, [bpm])
-  useEffect(() => {
-    offsetRef.current = offsetSec
-  }, [offsetSec])
-  useEffect(() => {
-    centerRef.current = centerFrac
-  }, [centerFrac])
-  useEffect(() => {
-    durationRef.current = duration
-  }, [duration])
-  useEffect(() => {
-    playingRef.current = playing
-  }, [playing])
   useEffect(() => {
     onDbRef.current = onDownbeatChange
   })
@@ -326,12 +268,10 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
     setZoom(1)
     setCenterFrac(0.5)
     setOffsetSec(0)
-    setPlaying(false)
     let cancelled = false
-    analyze(file, getCtx())
-      .then(({ peaks, duration, buffer, onset, onsetRate }) => {
+    analyze(file)
+      .then(({ peaks, duration, onset, onsetRate }) => {
         if (cancelled) return
-        bufferRef.current = buffer
         onsetRef.current = { onset, onsetRate }
         setPeaks(peaks)
         setDuration(duration)
@@ -339,16 +279,8 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
       .catch(() => {})
     return () => {
       cancelled = true
-      stopSource()
     }
   }, [file])
-
-  // Close the audio context on unmount.
-  useEffect(() => {
-    return () => {
-      playCtxRef.current?.close().catch(() => {})
-    }
-  }, [])
 
   const visibleLen = duration > 0 ? duration / zoom : 0
   const eCenter = clampCenterVal(centerFrac, visibleLen, duration)
@@ -361,21 +293,20 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
 
   // Auto-align the grid to the detected kick onsets for the current BPM.
   useEffect(() => {
-    if (!duration || playingRef.current) return
+    if (!duration) return
     const info = onsetRef.current
     if (!info) return
     setOffsetSec(estimateOffset(info.onset, info.onsetRate, bpm || 120, duration))
   }, [bpm, duration])
 
   useEffect(() => {
-    if (playing) return // the rAF loop drives drawing during playback
     const canvas = canvasRef.current
     if (!canvas) return
     const render = () => draw(canvas, peaks, bpm, duration, viewStart, visibleLen, offsetSec)
     render()
     window.addEventListener('resize', render)
     return () => window.removeEventListener('resize', render)
-  }, [playing, peaks, bpm, duration, viewStart, visibleLen, offsetSec])
+  }, [peaks, bpm, duration, viewStart, visibleLen, offsetSec])
 
   // Wheel: vertical = zoom (around center); horizontal / shift = navigate.
   useEffect(() => {
@@ -398,62 +329,8 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
     return () => canvas.removeEventListener('wheel', onWheel)
   }, [duration])
 
-  // Follow playback: scroll the waveform so the *audible* time sits at the
-  // playhead. Uses the audio-context clock minus output latency for accuracy.
-  useEffect(() => {
-    if (!playing || !duration) return
-    const ctx = playCtxRef.current
-    const canvas = canvasRef.current
-    if (!ctx || !canvas) return
-    let raf = 0
-    const tick = () => {
-      const info = playInfoRef.current
-      if (info) {
-        const latency = ctx.outputLatency || ctx.baseLatency || 0
-        const dur = durationRef.current
-        const vLen = dur / zoomRef.current
-        const audioTime = info.startOffset + (ctx.currentTime - info.startCtx) - latency
-        // Draw straight from the audio clock — no React round-trip, no clamp, so
-        // the playhead tracks the audible position as tightly as possible.
-        draw(canvas, peaksRef.current, bpmRef.current, dur, audioTime - vLen / 2, vLen, offsetRef.current)
-      }
-      raf = requestAnimationFrame(tick)
-    }
-    raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
-  }, [playing, duration])
-
-  const togglePlay = useCallback(() => {
-    const dur = durationRef.current
-    const buffer = bufferRef.current
-    if (!dur || !buffer) return
-    if (playingRef.current) {
-      stopSource()
-      setPlaying(false)
-      setCenterFrac(resumeCenterRef.current) // snap back to where we were looking
-      return
-    }
-    const ctx = getCtx()
-    ctx.resume().catch(() => {})
-    resumeCenterRef.current = centerRef.current
-    const c = clampCenterVal(centerRef.current, dur / zoomRef.current, dur)
-    const startOffset = clamp(c * dur, 0, Math.max(0, dur - 0.05))
-    const src = ctx.createBufferSource()
-    src.buffer = buffer
-    src.connect(ctx.destination)
-    stoppingRef.current = false
-    src.onended = () => {
-      if (stoppingRef.current) return
-      setPlaying(false)
-      setCenterFrac(resumeCenterRef.current)
-    }
-    src.start(0, startOffset)
-    srcRef.current = src
-    playInfoRef.current = { startCtx: ctx.currentTime, startOffset }
-    setPlaying(true)
-  }, [])
-
-  // Spacebar = play/pause (unless typing in a field).
+  // Spacebar is reserved for playback (disabled for now) — swallow it so it
+  // doesn't scroll the page or click a focused control.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.code !== 'Space') return
@@ -461,13 +338,12 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
       const tag = el?.tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA' || el?.isContentEditable) return
       e.preventDefault()
-      togglePlay()
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [togglePlay])
+  }, [])
 
-  // Drag the waveform to align: pan the view and keep a downbeat under the playhead.
+  // Drag the waveform to align: pan and keep a downbeat under the center line.
   const drag = useRef<{ x: number; center: number } | null>(null)
   const onDown = (e: React.PointerEvent) => {
     ;(e.target as Element).setPointerCapture(e.pointerId)

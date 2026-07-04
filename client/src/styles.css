@@ -203,6 +203,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; filter: n
 .scroll-thumb.active { background: var(--accent); }
 
 .transport { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.calibrate { margin-top: 14px; }
 .play-btn {
   display: flex;
   align-items: center;
