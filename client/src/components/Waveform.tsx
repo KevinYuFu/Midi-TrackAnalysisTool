@@ -457,7 +457,6 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
   // (the view runs off the track edges into empty space, like during playback).
   const eCenter = clamp(centerFrac, 0, 1)
   const viewStart = eCenter * duration - visibleLen / 2
-  const zoomMin = zoomMinFor(duration)
   const clampC = (c: number) => clamp(c, 0, 1)
 
   useEffect(() => {
@@ -564,15 +563,20 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
   const onMove = (e: React.PointerEvent) => {
     const canvas = canvasRef.current
     if (!drag.current || !canvas || !duration) return
+    // Pan: the grid is track-anchored, so it scrolls under the fixed center line.
     const df = -((e.clientX - drag.current.x) / canvas.clientWidth) * (visibleLen / duration)
-    const newCenter = clampC(clamp(drag.current.center + df, 0, 1))
-    setCenterFrac(newCenter)
-    const barSec = (60 / (bpm || 120)) * 4
-    const ct = newCenter * duration
-    setOffsetSec(((ct % barSec) + barSec) % barSec)
+    setCenterFrac(clamp(drag.current.center + df, 0, 1))
   }
   const onUp = () => {
     drag.current = null
+  }
+
+  // Set grid: anchor a downbeat to wherever the center line currently sits.
+  const onSetGrid = () => {
+    if (!duration) return
+    const centerTime = playing ? livePos() : eCenter * duration
+    const barSec = (60 / (bpm || 120)) * 4
+    setOffsetSec(((centerTime % barSec) + barSec) % barSec)
   }
 
   // Overview strip (navigate the whole track).
@@ -595,30 +599,6 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
     overviewDrag.current = false
   }
 
-  // Vertical zoom slider (top = max zoom).
-  const zoomDrag = useRef(false)
-  const zoomTo = (clientY: number, el: Element) => {
-    const rect = el.getBoundingClientRect()
-    const frac = clamp(1 - (clientY - rect.top) / rect.height, 0, 1)
-    const zMin = zoomMinFor(durationRef.current)
-    const span = Math.max(0, Math.log(MAX_ZOOM / zMin))
-    setZoom(clamp(zMin * Math.exp(frac * span), zMin, MAX_ZOOM))
-  }
-  const onZoomDown = (e: React.PointerEvent) => {
-    ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
-    zoomDrag.current = true
-    zoomTo(e.clientY, e.currentTarget)
-  }
-  const onZoomMove = (e: React.PointerEvent) => {
-    if (zoomDrag.current) zoomTo(e.clientY, e.currentTarget)
-  }
-  const onZoomUp = () => {
-    zoomDrag.current = false
-  }
-
-  const zoomSpan = Math.log(MAX_ZOOM / zoomMin)
-  const zoomFrac = zoomSpan > 0 ? Math.log(zoom / zoomMin) / zoomSpan : 0
-
   return (
     <div className="deck">
       <div className="deck-body">
@@ -629,15 +609,9 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
           onPointerMove={onMove}
           onPointerUp={onUp}
         />
-        <div
-          className="zoom-slider"
-          style={{ height: CANVAS_H }}
-          onPointerDown={onZoomDown}
-          onPointerMove={onZoomMove}
-          onPointerUp={onZoomUp}
-        >
-          <div className="zoom-thumb" style={{ bottom: `calc(3px + ${zoomFrac} * (100% - 32px))` }} />
-        </div>
+        <button type="button" className="set-grid-btn" onClick={onSetGrid} disabled={!file}>
+          Set grid
+        </button>
       </div>
 
       <canvas

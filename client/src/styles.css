@@ -149,7 +149,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; filter: n
 
 /* --- Rekordbox-style waveform + beatgrid --- */
 .deck { margin: 0; }
-.deck-body { display: flex; gap: 8px; align-items: stretch; }
+.deck-body { position: relative; display: flex; gap: 8px; align-items: stretch; }
 .deck-body canvas {
   flex: 1;
   min-width: 0;
@@ -162,24 +162,28 @@ button:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; filter: n
 }
 .deck-body canvas:active { cursor: grabbing; }
 
-.zoom-slider {
-  position: relative;
-  flex-shrink: 0;
-  width: 22px;
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  background: var(--surface-2);
-  cursor: ns-resize;
-  touch-action: none;
-}
-.zoom-thumb {
+.set-grid-btn {
   position: absolute;
-  left: 3px;
-  right: 3px;
-  height: 26px;
-  border-radius: 6px;
-  background: var(--accent);
+  top: 10px;
+  right: 10px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  background: rgba(10, 12, 16, 0.6);
+  border: 1px solid var(--border-strong);
+  box-shadow: none;
+  backdrop-filter: blur(4px);
 }
+.set-grid-btn:hover {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+  box-shadow: none;
+  filter: none;
+}
+.set-grid-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .overview {
   display: block;
