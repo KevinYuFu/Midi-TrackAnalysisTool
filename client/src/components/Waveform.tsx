@@ -463,13 +463,29 @@ export function Waveform({ file, bpm, onDownbeatChange }: Props) {
     onDbRef.current(Math.round(offsetSec * 1000))
   }, [offsetSec])
 
-  // Auto-align the grid to the detected kick onsets for the current BPM.
+  // Auto-align the grid to the detected kick onsets when a track loads.
   useEffect(() => {
     if (!duration || playingRef.current) return
     const info = onsetRef.current
     if (!info) return
-    setOffsetSec(estimateOffset(info.onset, info.onsetRate, bpm || 120, duration))
-  }, [bpm, duration])
+    setOffsetSec(estimateOffset(info.onset, info.onsetRate, bpmRef.current || 120, duration))
+  }, [duration])
+
+  // Changing BPM stretches the grid around the center line: keep a downbeat under
+  // the cursor and let the beats spread/compress around it.
+  const prevBpmRef = useRef(bpm)
+  useEffect(() => {
+    const dur = durationRef.current
+    if (!dur) {
+      prevBpmRef.current = bpm
+      return
+    }
+    if (prevBpmRef.current === bpm) return
+    prevBpmRef.current = bpm
+    const centerTime = playingRef.current ? livePos() : centerRef.current * dur
+    const barSec = (60 / (bpm || 120)) * 4
+    setOffsetSec(((centerTime % barSec) + barSec) % barSec)
+  }, [bpm, livePos])
 
   // Idle draw (not playing) from React state.
   useEffect(() => {
