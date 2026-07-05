@@ -120,13 +120,6 @@ export default function App() {
       )}
 
       <div className="card">
-        <Waveform
-          file={file}
-          bpm={settings.bpm ?? 120}
-          downbeatMs={settings.downbeat_ms}
-          onDownbeatChange={(ms) => set({ downbeat_ms: ms })}
-        />
-
         <button type="button" className="track-loader" onClick={() => fileRef.current?.click()}>
           <span className={`track-name${file ? '' : ' empty'}`}>
             {file ? file.name : 'Load a track'}
@@ -139,6 +132,12 @@ export default function App() {
           accept="audio/*"
           hidden
           onChange={(e) => e.target.files?.[0] && onPick(e.target.files[0])}
+        />
+
+        <Waveform
+          file={file}
+          bpm={settings.bpm ?? 120}
+          onDownbeatChange={(ms) => set({ downbeat_ms: ms })}
         />
 
         <div className="divider" />
